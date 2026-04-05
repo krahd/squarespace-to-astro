@@ -81,11 +81,11 @@ def build_astro_manifest(
     blog_base_path = infer_blog_base_path(page_snapshots, snapshot_root, xml_items)
     blog_title = determine_blog_title(page_snapshots, blog_base_path, site_title)
     skipped_utility_routes = sorted(
-      {
-        route_path_for_page(page)
-        for page in page_snapshots
-        if is_utility_route(route_path_for_page(page))
-      }
+        {
+            route_path_for_page(page)
+            for page in page_snapshots
+            if is_utility_route(route_path_for_page(page))
+        }
     )
 
     pages = build_page_entries(page_snapshots, snapshot_root, xml_items, blog_base_path, site_title)
