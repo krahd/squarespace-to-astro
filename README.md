@@ -1,6 +1,6 @@
-# squarespace-to-astro
+# squarespace-to-astro (s2a)
 
-Python tooling for migrating a Squarespace site into a static-site-friendly content snapshot, with Astro as the intended downstream renderer.
+Python tooling for migrating a Squarespace site into a static-site-friendly content snapshot, with [Astro](https://github.com/withastro/astro) as the intended downstream renderer.
 
 ## Current status
 
@@ -10,7 +10,7 @@ This repository currently implements the first milestone:
 - Crawl a site into a structured snapshot of pages, links, assets, headings, and opportunistic Squarespace JSON data.
 - Capture browser-authenticated session state with Playwright and reuse those cookies during probe and crawl runs.
 - Import Squarespace WordPress XML exports into a normalized JSON format.
-- Generate a buildable Astro project from crawl output plus optional XML content.
+- Generate a buildable [Astro](https://github.com/withastro/astro) project from crawl output plus optional XML content.
 
 Still not implemented:
 
@@ -27,7 +27,9 @@ pip install -e .[dev]
 python -m playwright install chromium
 ```
 
-See `USER_GUIDE.md` for a step-by-step workflow, generated Astro editing notes, and output-folder conventions.
+See `USER_GUIDE.md` for a step-by-step workflow, generated [Astro](https://github.com/withastro/astro) editing notes, and output-folder conventions.
+
+Developer overview page: [krahd.github.io/squarespace-to-astro](https://krahd.github.io/squarespace-to-astro/).
 
 ## Authentication
 
@@ -78,7 +80,7 @@ Import a Squarespace WordPress XML export:
 s2a import-xml ./exports/squarespace-wordpress.xml --output-dir ./site-output/example
 ```
 
-Generate an Astro site from a crawl snapshot and optional imported XML:
+Generate an [Astro](https://github.com/withastro/astro) site from a crawl snapshot and optional imported XML:
 
 ```bash
 s2a generate-astro ./site-output/example/site_snapshot.json --output-dir ./generated/site --xml-import ./site-output/example/xml_import.json
@@ -122,13 +124,13 @@ s2a migrate https://example.squarespace.com --output-dir ./site-output/example -
 - `astro_generation.json`
 - `execution-metadata.json`
 - `migration-manifest.json`
-- a complete Astro project directory
+- a complete [Astro](https://github.com/withastro/astro) project directory
 
 ## Scope notes
 
 This tool is intentionally hybrid. Squarespace's official export is limited, and `?format=json-pretty` is useful but not a supported migration API. The crawler therefore treats rendered HTML as the fallback source of truth and uses structured Squarespace JSON only when available.
 
-The generator converts extracted page bodies to Markdown where possible and falls back to cleaned embedded HTML when conversion quality is weak. That keeps the generated Astro project editable without blocking on perfect HTML-to-Markdown conversion for every Squarespace layout.
+The generator converts extracted page bodies to Markdown where possible and falls back to cleaned embedded HTML when conversion quality is weak. That keeps the generated [Astro](https://github.com/withastro/astro) project editable without blocking on perfect HTML-to-Markdown conversion for every Squarespace layout.
 
 Utility routes such as `/cart`, `/checkout`, and `/account` are intentionally skipped during Astro generation because they do not map cleanly to a static site.
 

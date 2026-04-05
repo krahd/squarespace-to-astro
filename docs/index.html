@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>squarespace-to-astro</title>
+    <meta
+      name="description"
+      content="Python CLI for migrating Squarespace sites to static-site-friendly content snapshots and Astro projects."
+    />
+    <link rel="stylesheet" href="./site.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <p class="eyebrow">Squarespace Migration Tooling</p>
+        <h1>squarespace-to-astro</h1>
+        <p class="lead">
+          A Python CLI that probes and crawls Squarespace sites, captures authenticated content,
+          imports WordPress XML exports, and generates buildable
+          <a href="https://github.com/withastro/astro">Astro</a> projects.
+        </p>
+        <div class="actions">
+          <a href="https://github.com/krahd/squarespace-to-astro">GitHub Repo</a>
+          <a href="https://github.com/krahd/squarespace-to-astro/releases">Releases</a>
+          <a href="https://github.com/withastro/astro">Astro Repo</a>
+        </div>
+      </header>
+
+      <main>
+        <section class="surface">
+          <h2>What it does</h2>
+          <div class="grid two-up">
+            <article>
+              <h3>Capture the source site</h3>
+              <p>
+                Probe sitemap and robots behavior, crawl pages, store HTML and JSON snapshots, and
+                preserve browser-authenticated access with Playwright storage state.
+              </p>
+            </article>
+            <article>
+              <h3>Normalize migration inputs</h3>
+              <p>
+                Merge Squarespace WordPress XML exports into the snapshot so page and post content
+                can be resolved from the strongest available source.
+              </p>
+            </article>
+            <article>
+              <h3>Generate a static target</h3>
+              <p>
+                Produce a developer-editable <a href="https://github.com/withastro/astro">Astro</a>
+                project with Markdown content, route data, navigation, and generation metadata.
+              </p>
+            </article>
+            <article>
+              <h3>Keep runs inspectable</h3>
+              <p>
+                Default CLI runs create unique folders under <code>site-output/</code> and write
+                <code>execution-metadata.json</code> for repeatable debugging and auditing.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section class="surface">
+          <h2>CLI workflow</h2>
+          <pre><code>python -m venv .venv
+source .venv/bin/activate
+pip install -e .[dev]
+python -m playwright install chromium
+
+export SQUARESPACE_USER=owner@example.com
+export SQUARESPACE_PWD=owner-password
+
+s2a migrate https://example.squarespace.com \
+  --xml-export ./exports/squarespace-wordpress.xml</code></pre>
+          <p>
+            The generated site is a normal <a href="https://github.com/withastro/astro">Astro</a>
+            project. After generation, move into the output directory and run
+            <code>npm install</code> followed by <code>npm run dev</code>.
+          </p>
+        </section>
+
+        <section class="surface">
+          <h2>Outputs</h2>
+          <div class="grid two-up">
+            <article>
+              <h3>Snapshot artifacts</h3>
+              <ul>
+                <li><code>probe.json</code></li>
+                <li><code>site_snapshot.json</code></li>
+                <li><code>report.json</code></li>
+                <li><code>raw-html/</code> and <code>raw-json/</code></li>
+                <li><code>execution-metadata.json</code></li>
+              </ul>
+            </article>
+            <article>
+              <h3>Generated project</h3>
+              <ul>
+                <li><code>migration-manifest.json</code></li>
+                <li><code>src/content/pages/*.md</code></li>
+                <li><code>src/content/posts/*.md</code></li>
+                <li><code>src/data/site.json</code></li>
+                <li><code>src/layouts/</code> and <code>src/pages/</code></li>
+              </ul>
+            </article>
+          </div>
+        </section>
+
+        <section class="surface">
+          <h2>Current boundaries</h2>
+          <ul>
+            <li>2FA is not supported in the automated browser-auth flow.</li>
+            <li>Utility routes such as <code>/cart</code>, <code>/checkout</code>, and <code>/account</code> are intentionally skipped.</li>
+            <li>Commerce, events, forms, members, and full admin automation are not migrated.</li>
+            <li>Asset downloading and redirect generation are still pending.</li>
+          </ul>
+        </section>
+
+        <section class="surface links">
+          <h2>Developer links</h2>
+          <ul>
+            <li><a href="https://github.com/krahd/squarespace-to-astro/blob/main/README.md">README</a></li>
+            <li><a href="https://github.com/krahd/squarespace-to-astro/blob/main/USER_GUIDE.md">User guide</a></li>
+            <li><a href="https://github.com/krahd/squarespace-to-astro/releases">GitHub releases</a></li>
+            <li><a href="https://github.com/withastro/astro">Astro repository</a></li>
+          </ul>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

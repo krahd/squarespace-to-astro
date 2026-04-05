@@ -6,7 +6,7 @@
 2. Install the package and Playwright Chromium.
 3. Export `SQUARESPACE_USER` and `SQUARESPACE_PWD` if you need account-authenticated access.
 4. Run `s2a migrate` against the target site.
-5. Open the generated Astro project and continue editing there.
+5. Open the generated [Astro](https://github.com/withastro/astro) project and continue editing there.
 
 ```bash
 python -m venv .venv
@@ -19,6 +19,8 @@ export SQUARESPACE_PWD=owner-password
 
 s2a migrate https://example.squarespace.com --xml-export ./exports/squarespace-wordpress.xml
 ```
+
+Developer overview page: [krahd.github.io/squarespace-to-astro](https://krahd.github.io/squarespace-to-astro/).
 
 ## Authentication notes
 
@@ -61,21 +63,21 @@ Capture authenticated browser state only:
 s2a auth-browser https://example.squarespace.com
 ```
 
-Crawl without generating Astro:
+Crawl without generating [Astro](https://github.com/withastro/astro):
 
 ```bash
 s2a crawl https://example.squarespace.com --max-pages 100
 ```
 
-Generate Astro from an existing snapshot:
+Generate [Astro](https://github.com/withastro/astro) from an existing snapshot:
 
 ```bash
 s2a generate-astro ./site-output/20260405-153000-crawl-example-com/site_snapshot.json --output-dir ./generated/example-site
 ```
 
-## Editing the generated Astro site
+## Editing the generated [Astro](https://github.com/withastro/astro) site
 
-The generated site is a normal Astro project.
+The generated site is a normal [Astro](https://github.com/withastro/astro) project.
 
 ```bash
 cd ./generated/example-site
@@ -88,8 +90,8 @@ Most hand edits happen in these locations:
 - `src/content/pages/`: generated page content in Markdown
 - `src/content/posts/`: generated post content in Markdown
 - `src/data/site.json`: site title, description, base URL, and navigation
-- `src/layouts/`: shared Astro layouts
-- `src/pages/`: Astro route files
+- `src/layouts/`: shared [Astro](https://github.com/withastro/astro) layouts
+- `src/pages/`: [Astro](https://github.com/withastro/astro) route files
 - `src/styles/site.css`: site styling
 
 ## What the generator skips

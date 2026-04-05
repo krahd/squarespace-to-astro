@@ -4,10 +4,33 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "squarespace-to-astro"
-version = "0.2.0"
+version = "0.2.1"
 description = "Probe and crawl Squarespace sites into a static-site migration snapshot."
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.11"
+keywords = [
+  "squarespace",
+  "astro",
+  "migration",
+  "static-site-generator",
+  "cli",
+  "xml-import",
+  "web-scraping",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Internet :: WWW/HTTP",
+  "Topic :: Software Development :: Build Tools",
+  "Topic :: Utilities",
+]
 dependencies = [
   "beautifulsoup4>=4.12,<5",
   "httpx>=0.27,<1",
@@ -16,8 +39,15 @@ dependencies = [
   "PyYAML>=6,<7",
 ]
 
+[project.urls]
+Homepage = "https://krahd.github.io/squarespace-to-astro/"
+Documentation = "https://krahd.github.io/squarespace-to-astro/"
+Repository = "https://github.com/krahd/squarespace-to-astro"
+Issues = "https://github.com/krahd/squarespace-to-astro/issues"
+
 [project.optional-dependencies]
 dev = [
+  "build>=1,<2",
   "pytest>=8,<9",
 ]
 
