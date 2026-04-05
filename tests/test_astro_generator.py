@@ -227,3 +227,72 @@ def test_extract_main_html_handles_nested_noise_elements() -> None:
 
     assert "Article Title" in fragment
     assert "sidebar" not in fragment
+
+
+def test_generate_astro_project_skips_utility_routes(tmp_path: Path) -> None:
+    snapshot_dir = tmp_path / "snapshot"
+    raw_html_dir = snapshot_dir / "raw-html"
+    raw_html_dir.mkdir(parents=True)
+
+    write_text(
+        raw_html_dir / "index.html",
+        "<html><body><main><h1>Home Title</h1><p>Welcome to the site.</p></main></body></html>",
+    )
+    write_text(
+        raw_html_dir / "cart.html",
+        "<html><body><main><h1>Your Cart</h1><p>Cart contents.</p></main></body></html>",
+    )
+
+    probe = SiteProbe(
+        target_url="https://example.com/",
+        final_home_url="https://example.com/",
+        site_origin="https://example.com",
+        homepage_status_code=200,
+        homepage_title="Example Site",
+        probably_squarespace=True,
+        homepage_links=[
+            "https://example.com/",
+            "https://example.com/cart",
+        ],
+    )
+    snapshot = CrawlSnapshot(
+        generated_at="2026-04-05T00:00:00+00:00",
+        target_url="https://example.com/",
+        base_url="https://example.com/",
+        probe=probe,
+        pages=[
+            PageSnapshot(
+                requested_url="https://example.com/",
+                final_url="https://example.com/",
+                status_code=200,
+                content_type="text/html",
+                title="Home Title — Example Site",
+                meta_description="Home description",
+                canonical_url="https://example.com/",
+                raw_html_path="raw-html/index.html",
+            ),
+            PageSnapshot(
+                requested_url="https://example.com/cart",
+                final_url="https://example.com/cart",
+                status_code=200,
+                content_type="text/html",
+                title="Cart — Example Site",
+                meta_description="Cart description",
+                canonical_url="https://example.com/cart",
+                raw_html_path="raw-html/cart.html",
+            ),
+        ],
+    )
+
+    snapshot_path = snapshot_dir / "site_snapshot.json"
+    write_json(snapshot_path, snapshot)
+
+    output_dir = tmp_path / "astro-site"
+    result = generate_astro_project(snapshot_path, output_dir, site_url="https://example.com")
+    manifest = read_json(output_dir / "migration-manifest.json")
+
+    assert result.pages_written == 1
+    assert all(page["route_path"] != "/cart" for page in manifest["pages"])
+    assert all(item["url"] != "/cart" for item in manifest["navigation"])
+    assert not (output_dir / "src/content/pages/cart.md").exists()
+    assert any("/cart" in warning for warning in result.warnings)

@@ -1,4 +1,5 @@
 import argparse
+from pathlib import Path
 
 import s2a.cli as cli
 from s2a.normalize.models import AuthCaptureReport
@@ -6,6 +7,10 @@ from s2a.normalize.models import AuthCaptureReport
 
 def make_auth_namespace(
     *,
+    command: str = "crawl",
+    target: str = "https://example.com",
+    output_dir: str | None = None,
+    xml_file: str | None = None,
     storage_state: str | None = None,
     site_password: str | None = None,
     login_url: str | None = None,
@@ -15,7 +20,10 @@ def make_auth_namespace(
     auth_headless: bool = True,
 ) -> argparse.Namespace:
     return argparse.Namespace(
-        target="https://example.com",
+        command=command,
+        target=target,
+        output_dir=output_dir,
+        xml_file=xml_file,
         storage_state=storage_state,
         site_password=site_password,
         login_url=login_url,
@@ -115,3 +123,35 @@ def test_prepare_storage_state_skips_capture_without_auth_inputs(monkeypatch, tm
     args = make_auth_namespace()
 
     assert cli.prepare_storage_state(args, tmp_path) is None
+
+
+def test_resolve_output_dir_uses_unique_site_output_by_default(monkeypatch) -> None:
+    monkeypatch.setattr(cli, "output_dir_timestamp", lambda: "20260405-123456")
+
+    args = make_auth_namespace(command="crawl", output_dir=None, target="https://Example.com/blog")
+
+    assert cli.resolve_output_dir(args) == (
+        Path("site-output/20260405-123456-crawl-example-com"),
+        True,
+    )
+
+
+def test_build_execution_metadata_redacts_sensitive_arguments() -> None:
+    args = make_auth_namespace(
+        command="migrate",
+        output_dir=None,
+        password="secret-password",
+        site_password="secret-gate",
+    )
+
+    metadata = cli.build_execution_metadata(
+        args,
+        Path("site-output/20260405-123456-migrate-example-com"),
+        used_default_output_dir=True,
+        artifacts={"report": "report.json"},
+    )
+
+    assert metadata["used_default_output_dir"] is True
+    assert metadata["parameters"]["password"] == "<redacted>"
+    assert metadata["parameters"]["site_password"] == "<redacted>"
+    assert metadata["artifacts"] == {"report": "report.json"}

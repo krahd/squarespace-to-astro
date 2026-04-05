@@ -25,6 +25,7 @@ NOISE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 KNOWN_BLOG_SEGMENTS = {"blog", "news", "journal", "stories", "posts", "writing"}
+UTILITY_ROUTE_SEGMENTS = {"cart", "checkout", "account"}
 
 
 def generate_astro_project(
@@ -79,6 +80,13 @@ def build_astro_manifest(
     base_url = probe.get("final_home_url") or snapshot.get("base_url")
     blog_base_path = infer_blog_base_path(page_snapshots, snapshot_root, xml_items)
     blog_title = determine_blog_title(page_snapshots, blog_base_path, site_title)
+    skipped_utility_routes = sorted(
+      {
+        route_path_for_page(page)
+        for page in page_snapshots
+        if is_utility_route(route_path_for_page(page))
+      }
+    )
 
     pages = build_page_entries(page_snapshots, snapshot_root, xml_items, blog_base_path, site_title)
     posts = build_post_entries(page_snapshots, snapshot_root, xml_items, blog_base_path, site_title)
@@ -108,6 +116,12 @@ def build_astro_manifest(
     if not posts:
         warnings.append(
             "No blog posts were generated. The Astro site will contain page content only.")
+
+    if skipped_utility_routes:
+        warnings.append(
+            "Skipped utility routes that do not map cleanly to static content: "
+            + ", ".join(skipped_utility_routes)
+        )
 
     return AstroManifest(
         generated_at=datetime.now(UTC).isoformat(),
@@ -142,6 +156,8 @@ def build_page_entries(
 
     for page in page_snapshots:
         route_path = route_path_for_page(page)
+        if is_utility_route(route_path):
+            continue
         if route_path == blog_base_path and posts_exist:
             continue
         if is_post_path(route_path, blog_base_path):
@@ -163,6 +179,8 @@ def build_page_entries(
         entries[route_path] = entry
 
     for route_path, xml_page in xml_pages.items():
+        if is_utility_route(route_path):
+            continue
         if route_path == blog_base_path and posts_exist:
             continue
         if is_post_path(route_path, blog_base_path):
@@ -196,6 +214,8 @@ def build_post_entries(
 
     for page in page_snapshots:
         route_path = route_path_for_page(page)
+        if is_utility_route(route_path):
+            continue
         if not is_post_path(route_path, blog_base_path):
             continue
         if route_path in entries:
@@ -347,6 +367,8 @@ def build_navigation(
 
     for link in homepage_links:
         path = normalize_path(urlsplit(link).path)
+        if is_utility_route(path):
+            continue
         if path in seen:
             continue
         if path == blog_base_path and posts:
@@ -1181,6 +1203,13 @@ def is_post_path(route_path: str, blog_base_path: str) -> bool:
         return False
     prefix = blog_base_path.rstrip("/") + "/"
     return route_path.startswith(prefix)
+
+
+def is_utility_route(route_path: str) -> bool:
+    segments = path_segments(route_path)
+    if not segments:
+        return False
+    return segments[0] in UTILITY_ROUTE_SEGMENTS
 
 
 def slug_for_page(route_path: str) -> str:

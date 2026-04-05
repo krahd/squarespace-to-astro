@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
+from urllib.parse import urlsplit
 
+from s2a import __version__
 from s2a.extract.auth import apply_storage_state_cookies, capture_storage_state
 from s2a.extract.crawl import crawl_site
 from s2a.extract.xml_import import import_wordpress_xml
@@ -13,6 +17,10 @@ from s2a.generate.astro import generate_astro_project
 from s2a.net import build_client
 from s2a.normalize.transform import build_report
 from s2a.probe import probe_site
+
+
+EXECUTION_METADATA_FILE = "execution-metadata.json"
+SENSITIVE_ARGUMENTS = {"password", "site_password"}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -64,8 +72,7 @@ def build_parser() -> argparse.ArgumentParser:
     xml_parser.add_argument("xml_file", help="Path to the WordPress XML export file.")
     xml_parser.add_argument(
         "--output-dir",
-        default="site-output/xml-import",
-        help="Directory for the normalized XML import JSON file.",
+        help="Directory for the normalized XML import JSON file. Defaults to a unique folder under site-output/.",
     )
 
     astro_parser = subparsers.add_parser(
@@ -74,8 +81,7 @@ def build_parser() -> argparse.ArgumentParser:
     astro_parser.add_argument("snapshot", help="Path to site_snapshot.json.")
     astro_parser.add_argument(
         "--output-dir",
-        default="generated/astro-site",
-        help="Directory where the Astro project should be created.",
+        help="Directory where the Astro project should be created. Defaults to generated/astro-site.",
     )
     astro_parser.add_argument(
         "--xml-import",
@@ -144,8 +150,7 @@ def add_shared_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("target", help="Target site URL or host name.")
     parser.add_argument(
         "--output-dir",
-        default="site-output/run",
-        help="Directory for JSON reports and raw page captures.",
+        help="Directory for JSON reports and raw page captures. Defaults to a unique folder under site-output/.",
     )
     parser.add_argument(
         "--timeout",
@@ -198,16 +203,22 @@ def resolve_auth_credentials(args: argparse.Namespace) -> tuple[str | None, str 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    output_dir, used_default_output_dir = resolve_output_dir(args)
+
     if args.command == "import-xml":
-        output_dir = Path(args.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
         xml_import = import_wordpress_xml(Path(args.xml_file))
         write_json(output_dir / "xml_import.json", xml_import)
+        write_execution_metadata(
+            output_dir,
+            args,
+            used_default_output_dir=used_default_output_dir,
+            artifacts={"xml_import": "xml_import.json"},
+        )
         print_xml_summary(output_dir, xml_import)
         return 0
 
     if args.command == "generate-astro":
-        output_dir = Path(args.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
         xml_input_path = resolve_xml_input(
             xml_import_path=args.xml_import,
@@ -223,10 +234,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             project_name=args.project_name,
         )
         write_json(output_dir / "astro_generation.json", result)
+        write_execution_metadata(
+            output_dir,
+            args,
+            used_default_output_dir=used_default_output_dir,
+            artifacts={
+                "astro_generation": "astro_generation.json",
+                "migration_manifest": "migration-manifest.json",
+            },
+        )
         print_astro_summary(output_dir, result)
         return 0
 
-    output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     username, password = resolve_auth_credentials(args)
 
@@ -242,6 +261,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             headless=args.auth_headless,
         )
         write_json(output_dir / "auth.json", report)
+        write_execution_metadata(
+            output_dir,
+            args,
+            used_default_output_dir=used_default_output_dir,
+            artifacts={
+                "auth_report": "auth.json",
+                "storage_state": report.storage_state_path,
+            },
+        )
         print_auth_summary(output_dir, report)
         return 0
 
@@ -259,6 +287,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "probe":
             probe = probe_site(client, args.target, max_sitemap_urls=args.max_sitemap_urls)
             write_json(output_dir / "probe.json", probe)
+            write_execution_metadata(
+                output_dir,
+                args,
+                used_default_output_dir=used_default_output_dir,
+                artifacts=build_probe_artifacts(output_dir),
+            )
             print_probe_summary(output_dir, probe)
             return 0
 
@@ -269,6 +303,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             write_json(output_dir / "probe.json", probe)
             write_json(output_dir / "site_snapshot.json", snapshot)
             write_json(output_dir / "report.json", report)
+            write_execution_metadata(
+                output_dir,
+                args,
+                used_default_output_dir=used_default_output_dir,
+                artifacts=build_crawl_artifacts(output_dir),
+            )
             print_crawl_summary(output_dir, report)
             return 0
 
@@ -297,6 +337,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 project_name=args.project_name,
             )
             write_json(output_dir / "astro_generation.json", astro_result)
+            write_execution_metadata(
+                output_dir,
+                args,
+                used_default_output_dir=used_default_output_dir,
+                artifacts=build_migrate_artifacts(output_dir, astro_dir, xml_import_path),
+            )
             print_migrate_summary(output_dir, report, astro_dir, astro_result)
             return 0
 
@@ -356,44 +402,178 @@ def resolve_xml_input(
     return target_path
 
 
+def resolve_output_dir(args: argparse.Namespace) -> tuple[Path, bool]:
+    requested_output_dir = getattr(args, "output_dir", None)
+    if requested_output_dir:
+        return Path(requested_output_dir), False
+
+    if args.command == "generate-astro":
+        return Path("generated/astro-site"), True
+
+    if args.command == "import-xml":
+        return build_default_output_dir(args.command, slugify_file_label(args.xml_file)), True
+
+    return build_default_output_dir(args.command, slugify_target_label(args.target)), True
+
+
+def build_default_output_dir(command: str, label: str) -> Path:
+    return Path("site-output") / f"{output_dir_timestamp()}-{command}-{label}"
+
+
+def output_dir_timestamp() -> str:
+    return datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+
+
+def slugify_target_label(target: str) -> str:
+    parsed = urlsplit(target if "://" in target else f"https://{target}")
+    candidate = parsed.netloc or parsed.path.split("/")[0] or target
+    return slugify_label(candidate)
+
+
+def slugify_file_label(path_value: str) -> str:
+    return slugify_label(Path(path_value).stem or path_value)
+
+
+def slugify_label(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+    return slug or "run"
+
+
+def write_execution_metadata(
+    output_dir: Path,
+    args: argparse.Namespace,
+    *,
+    used_default_output_dir: bool,
+    artifacts: dict[str, Any],
+) -> None:
+    write_json(
+        output_dir / EXECUTION_METADATA_FILE,
+        build_execution_metadata(
+            args,
+            output_dir,
+            used_default_output_dir=used_default_output_dir,
+            artifacts=artifacts,
+        ),
+    )
+
+
+def build_execution_metadata(
+    args: argparse.Namespace,
+    output_dir: Path,
+    *,
+    used_default_output_dir: bool,
+    artifacts: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "recorded_at": datetime.now(UTC).isoformat(),
+        "tool_version": __version__,
+        "command": args.command,
+        "output_dir": str(output_dir),
+        "used_default_output_dir": used_default_output_dir,
+        "parameters": sanitize_arguments(args),
+        "artifacts": {key: value for key, value in artifacts.items() if value is not None},
+    }
+
+
+def sanitize_arguments(args: argparse.Namespace) -> dict[str, Any]:
+    sanitized: dict[str, Any] = {}
+
+    for key, value in sorted(vars(args).items()):
+        if key == "command":
+            continue
+        if key in SENSITIVE_ARGUMENTS and value is not None:
+            sanitized[key] = "<redacted>"
+            continue
+        sanitized[key] = str(value) if isinstance(value, Path) else value
+
+    return sanitized
+
+
+def build_probe_artifacts(output_dir: Path) -> dict[str, str]:
+    artifacts = {"probe": "probe.json"}
+    if (output_dir / "auth.json").exists():
+        artifacts["auth_report"] = "auth.json"
+    return artifacts
+
+
+def build_crawl_artifacts(output_dir: Path) -> dict[str, str]:
+    artifacts = {
+        "probe": "probe.json",
+        "site_snapshot": "site_snapshot.json",
+        "report": "report.json",
+    }
+    if (output_dir / "auth.json").exists():
+        artifacts["auth_report"] = "auth.json"
+    return artifacts
+
+
+def build_migrate_artifacts(
+    output_dir: Path,
+    astro_dir: Path,
+    xml_import_path: Path | None,
+) -> dict[str, str]:
+    artifacts = {
+        "probe": "probe.json",
+        "site_snapshot": "site_snapshot.json",
+        "report": "report.json",
+        "astro_generation": "astro_generation.json",
+        "astro_output_dir": relative_artifact_path(output_dir, astro_dir),
+    }
+    if xml_import_path:
+        artifacts["xml_import"] = relative_artifact_path(output_dir, xml_import_path)
+    if (output_dir / "auth.json").exists():
+        artifacts["auth_report"] = "auth.json"
+    return artifacts
+
+
+def relative_artifact_path(output_dir: Path, artifact_path: Path) -> str:
+    try:
+        return str(artifact_path.relative_to(output_dir))
+    except ValueError:
+        return str(artifact_path)
+
+
 def print_probe_summary(output_dir: Path, probe) -> None:
     print(
         f"Wrote {output_dir / 'probe.json'} | squarespace={probe.probably_squarespace} | "
-        f"json={bool(probe.json_probe and probe.json_probe.available)} | sitemap_urls={len(probe.sitemap_entries)}"
+        f"json={bool(probe.json_probe and probe.json_probe.available)} | sitemap_urls={len(probe.sitemap_entries)} | "
+        f"metadata={output_dir / EXECUTION_METADATA_FILE}"
     )
 
 
 def print_crawl_summary(output_dir: Path, report) -> None:
     print(
         f"Wrote crawl output to {output_dir} | pages={report.pages_crawled} | ok={report.ok_pages} | "
-        f"json_pages={report.pages_with_json} | password_pages={report.password_gated_pages}"
+        f"json_pages={report.pages_with_json} | password_pages={report.password_gated_pages} | "
+        f"metadata={output_dir / EXECUTION_METADATA_FILE}"
     )
 
 
 def print_auth_summary(output_dir: Path, report) -> None:
     print(
         f"Wrote auth output to {output_dir} | mode={report.mode} | cookies={report.cookies_saved} | "
-        f"storage_state={report.storage_state_path}"
+        f"storage_state={report.storage_state_path} | metadata={output_dir / EXECUTION_METADATA_FILE}"
     )
 
 
 def print_xml_summary(output_dir: Path, xml_import) -> None:
     print(
-        f"Wrote {output_dir / 'xml_import.json'} | items={len(xml_import.items)} | site={xml_import.site_title or 'unknown'}"
+        f"Wrote {output_dir / 'xml_import.json'} | items={len(xml_import.items)} | site={xml_import.site_title or 'unknown'} | "
+        f"metadata={output_dir / EXECUTION_METADATA_FILE}"
     )
 
 
 def print_astro_summary(output_dir: Path, result) -> None:
     print(
         f"Generated Astro project at {output_dir} | pages={result.pages_written} | posts={result.posts_written} | "
-        f"manifest={result.manifest_path}"
+        f"manifest={result.manifest_path} | metadata={output_dir / EXECUTION_METADATA_FILE}"
     )
 
 
 def print_migrate_summary(output_dir: Path, report, astro_dir: Path, result) -> None:
     print(
         f"Wrote migration output to {output_dir} | crawled={report.pages_crawled} | astro_pages={result.pages_written} | "
-        f"astro_posts={result.posts_written} | astro_dir={astro_dir}"
+        f"astro_posts={result.posts_written} | astro_dir={astro_dir} | metadata={output_dir / EXECUTION_METADATA_FILE}"
     )
 
 

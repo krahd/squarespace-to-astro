@@ -27,6 +27,8 @@ pip install -e .[dev]
 python -m playwright install chromium
 ```
 
+See `USER_GUIDE.md` for a step-by-step workflow, generated Astro editing notes, and output-folder conventions.
+
 ## Authentication
 
 For Squarespace account login, export credentials before running `auth-browser`, `probe`, `crawl`, or `migrate`:
@@ -38,9 +40,13 @@ export SQUARESPACE_PWD=owner-password
 
 Those commands will use `SQUARESPACE_USER` and `SQUARESPACE_PWD` when `--username` and `--password` are not provided. Use the flags for one-off runs; they override the environment variables.
 
+To access private Squarespace areas with the automated browser-auth flow, the Squarespace account used by this tool must have two-factor authentication (2FA) disabled. The current auth flow does not handle interactive 2FA challenges.
+
 `--site-password` is separate. It submits a site-wide Squarespace password gate and does not use `SQUARESPACE_USER` or `SQUARESPACE_PWD`.
 
 ## Commands
+
+If you omit `--output-dir` for `probe`, `crawl`, `auth-browser`, `import-xml`, or `migrate`, the CLI creates a unique run folder under `site-output/` and writes `execution-metadata.json` alongside the generated artifacts.
 
 Probe a site and write a capability report:
 
@@ -89,12 +95,14 @@ s2a migrate https://example.squarespace.com --output-dir ./site-output/example -
 `probe` writes:
 
 - `probe.json`
+- `execution-metadata.json`
 
 `crawl` writes:
 
 - `probe.json`
 - `site_snapshot.json`
 - `report.json`
+- `execution-metadata.json`
 - `raw-html/*.html`
 - `raw-json/*.json`
 
@@ -102,13 +110,17 @@ s2a migrate https://example.squarespace.com --output-dir ./site-output/example -
 
 - `auth.json`
 - `auth/storage_state.json`
+- `execution-metadata.json`
 
 `import-xml` writes:
 
 - `xml_import.json`
+- `execution-metadata.json`
 
 `generate-astro` writes:
 
+- `astro_generation.json`
+- `execution-metadata.json`
 - `migration-manifest.json`
 - a complete Astro project directory
 
@@ -117,6 +129,8 @@ s2a migrate https://example.squarespace.com --output-dir ./site-output/example -
 This tool is intentionally hybrid. Squarespace's official export is limited, and `?format=json-pretty` is useful but not a supported migration API. The crawler therefore treats rendered HTML as the fallback source of truth and uses structured Squarespace JSON only when available.
 
 The generator converts extracted page bodies to Markdown where possible and falls back to cleaned embedded HTML when conversion quality is weak. That keeps the generated Astro project editable without blocking on perfect HTML-to-Markdown conversion for every Squarespace layout.
+
+Utility routes such as `/cart`, `/checkout`, and `/account` are intentionally skipped during Astro generation because they do not map cleanly to a static site.
 
 ## License
 
