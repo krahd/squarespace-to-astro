@@ -2,6 +2,8 @@
 
 This project accepts focused contributions that improve the CLI, generated output, release tooling, or documentation.
 
+If you are choosing a feature area or planning a larger change, review [ROADMAP.md](ROADMAP.md) first. The roadmap summarizes the implemented baseline, the main gaps to close before `1.0`, and the larger areas that are still outside the current core workflow.
+
 ## Development prerequisites
 
 - Python 3.11 or newer
@@ -44,6 +46,7 @@ If your change affects install flows, keep the website, [USER_GUIDE.md](USER_GUI
 ## Scope and style expectations
 
 - Keep pull requests focused on one change area when possible.
+- When proposing roadmap-level work, explain which item in [ROADMAP.md](ROADMAP.md) the change advances or why the roadmap should expand.
 - Avoid unrelated refactors while addressing a specific bug or feature.
 - Add or update tests when behavior changes.
 - Update documentation when command behavior, install guidance, release behavior, or generated output expectations change.
@@ -72,6 +75,7 @@ Those files affect installation, release artifacts, or the Homebrew tap and usua
 
 ## Further documentation
 
+- [ROADMAP.md](ROADMAP.md): current priorities, gaps, and `1.0` direction
 - [DEVELOPMENT.md](DEVELOPMENT.md): architecture, module layout, tests, and build tooling
 - [RELEASE.md](RELEASE.md): versioning and release workflow
 - [USER_GUIDE.md](USER_GUIDE.md): end-user workflow and command examples
