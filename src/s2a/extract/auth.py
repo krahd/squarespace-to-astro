@@ -71,15 +71,21 @@ def capture_storage_state(
             if site_password:
                 mode = "site-password"
                 password_field = page.locator(DEFAULT_PASSWORD_SELECTOR).first
-                password_field.wait_for(timeout=10_000)
+                try:
+                    password_field.wait_for(timeout=10_000)
+                except PlaywrightTimeoutError as exc:
+                    raise _rewrite_auth_timeout_error(login_url, mode=mode) from exc
                 password_field.fill(site_password)
                 click_submit(page)
             elif username and password:
                 mode = "credentials"
                 username_field = page.locator(DEFAULT_USERNAME_SELECTOR).first
                 password_field = page.locator(DEFAULT_PASSWORD_SELECTOR).first
-                username_field.wait_for(timeout=10_000)
-                password_field.wait_for(timeout=10_000)
+                try:
+                    username_field.wait_for(timeout=10_000)
+                    password_field.wait_for(timeout=10_000)
+                except PlaywrightTimeoutError as exc:
+                    raise _rewrite_auth_timeout_error(login_url, mode=mode) from exc
                 username_field.fill(username)
                 password_field.fill(password)
                 click_submit(page)
@@ -148,6 +154,24 @@ def _rewrite_navigation_error(
         guidance.append(
             "If you intentionally need to connect to a host with a broken certificate, rerun with --insecure."
         )
+
+    return RuntimeError(" ".join(guidance))
+
+
+def _rewrite_auth_timeout_error(url: str, *, mode: str) -> RuntimeError:
+    if mode == "credentials":
+        guidance = [
+            f"Timed out waiting for a login form at {url}.",
+            "The page did not expose the expected username and password fields.",
+            "If this site is public, rerun without auth options or unset SQUARESPACE_USER and SQUARESPACE_PWD.",
+            "If auth is required, pass --login-url to the actual login page or use --manual-auth.",
+        ]
+    else:
+        guidance = [
+            f"Timed out waiting for a site-password form at {url}.",
+            "The page did not expose the expected password field.",
+            "Check that the target URL or --login-url points at the gated page before using --site-password.",
+        ]
 
     return RuntimeError(" ".join(guidance))
 

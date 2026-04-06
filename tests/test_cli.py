@@ -114,7 +114,21 @@ def test_auth_browser_main_passes_insecure_flag(monkeypatch, tmp_path) -> None:
     assert calls["insecure"] is True
 
 
-def test_prepare_storage_state_uses_resolved_env_credentials(monkeypatch, tmp_path) -> None:
+def test_prepare_storage_state_skips_capture_with_only_env_credentials(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("SQUARESPACE_USER", "env@example.com")
+    monkeypatch.setenv("SQUARESPACE_PWD", "env-password")
+
+    def fake_capture_storage_state(**kwargs) -> AuthCaptureReport:  # pragma: no cover
+        raise AssertionError("capture_storage_state should not be called")
+
+    monkeypatch.setattr(cli, "capture_storage_state", fake_capture_storage_state)
+
+    args = make_auth_namespace()
+
+    assert cli.prepare_storage_state(args, tmp_path) is None
+
+
+def test_prepare_storage_state_uses_env_credentials_when_auth_is_explicit(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("SQUARESPACE_USER", "env@example.com")
     monkeypatch.setenv("SQUARESPACE_PWD", "env-password")
     calls: dict[str, object] = {}
@@ -124,7 +138,7 @@ def test_prepare_storage_state_uses_resolved_env_credentials(monkeypatch, tmp_pa
         return AuthCaptureReport(
             generated_at="2026-04-05T00:00:00+00:00",
             target_url="https://example.com",
-            login_url="https://example.com",
+            login_url="https://auth.example.com",
             storage_state_path="auth/storage_state.json",
             mode="credentials",
             cookies_saved=1,
@@ -133,7 +147,7 @@ def test_prepare_storage_state_uses_resolved_env_credentials(monkeypatch, tmp_pa
 
     monkeypatch.setattr(cli, "capture_storage_state", fake_capture_storage_state)
 
-    args = make_auth_namespace()
+    args = make_auth_namespace(login_url="https://auth.example.com")
 
     result = cli.prepare_storage_state(args, tmp_path)
 

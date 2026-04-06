@@ -39,7 +39,7 @@ If you need to run s2a from source instead of using Homebrew or the standalone b
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install "git+https://github.com/krahd/squarespace-to-astro.git@v0.2.3"
+pip install "git+https://github.com/krahd/squarespace-to-astro.git@v0.2.5"
 python -m playwright install chromium
 ```
 
@@ -81,7 +81,9 @@ export SQUARESPACE_PWD=owner-password
 
 Behavior notes:
 
-- `SQUARESPACE_USER` and `SQUARESPACE_PWD` are the default credentials for `auth-browser`, `probe`, `crawl`, and `migrate`.
+- `SQUARESPACE_USER` and `SQUARESPACE_PWD` are the default credentials for `auth-browser`.
+- For `probe`, `crawl`, and `migrate`, those environment variables are only used after you explicitly request browser auth with `--login-url`, `--manual-auth`, `--username`, or `--password`.
+- Plain public runs do not auto-start browser auth just because those environment variables are set.
 - `--username` and `--password` override those environment variables for one-off runs.
 - `--site-password` is only for a site-wide Squarespace password gate. It is separate from account login.
 - `--insecure` disables TLS certificate verification for both Playwright auth capture and later HTTP crawl requests. Use it only after confirming the URL is correct.

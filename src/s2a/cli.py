@@ -370,20 +370,24 @@ def prepare_storage_state(
     if getattr(args, "storage_state", None):
         return Path(args.storage_state)
 
-    if username is None and password is None:
-        username, password = resolve_auth_credentials(args)
-
     should_capture = any(
         (
             getattr(args, "site_password", None),
             getattr(args, "login_url", None),
-            username,
-            password,
+            getattr(args, "username", None),
+            getattr(args, "password", None),
         )
     ) or getattr(args, "manual_auth", False)
 
     if not should_capture:
         return None
+
+    if username is None or password is None:
+        resolved_username, resolved_password = resolve_auth_credentials(args)
+        if username is None:
+            username = resolved_username
+        if password is None:
+            password = resolved_password
 
     report = capture_storage_state(
         target_url=args.target,

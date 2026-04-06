@@ -2,7 +2,7 @@ from pathlib import Path
 
 from httpx import Client
 
-from s2a.extract.auth import _rewrite_navigation_error, apply_storage_state_cookies
+from s2a.extract.auth import _rewrite_auth_timeout_error, _rewrite_navigation_error, apply_storage_state_cookies
 from s2a.files import write_json
 
 
@@ -52,3 +52,14 @@ def test_rewrite_navigation_error_ignores_non_certificate_failures() -> None:
         )
         is None
     )
+
+
+def test_rewrite_auth_timeout_error_explains_missing_login_form() -> None:
+    error = _rewrite_auth_timeout_error(
+        "https://example.com/",
+        mode="credentials",
+    )
+
+    assert "Timed out waiting for a login form" in str(error)
+    assert "SQUARESPACE_USER" in str(error)
+    assert "--login-url" in str(error)
