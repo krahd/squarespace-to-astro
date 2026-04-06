@@ -187,7 +187,8 @@ def test_download_snapshot_assets_downloads_squarespace_assets_with_friendly_nam
             client,
             snapshot,
             tmp_path,
-            progress_callback=lambda completed, total, detail: progress_updates.append((completed, total, detail)),
+            progress_callback=lambda completed, total, detail: progress_updates.append(
+                (completed, total, detail)),
         )
 
     assert [item.public_path for item in manifest.items] == [
@@ -268,7 +269,8 @@ def test_estimate_snapshot_asset_download_uses_unique_squarespace_assets_and_tra
         estimate = estimate_snapshot_asset_download(
             client,
             snapshot,
-            progress_callback=lambda completed, total, detail: progress_updates.append((completed, total, detail)),
+            progress_callback=lambda completed, total, detail: progress_updates.append(
+                (completed, total, detail)),
         )
 
     assert estimate.asset_count == 2

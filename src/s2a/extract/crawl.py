@@ -38,7 +38,8 @@ def crawl_site(
     pages: list[PageSnapshot] = []
 
     if progress_callback is not None:
-        progress_callback(0, crawl_progress_total(queue, completed_pages=0, max_pages=max_pages), None)
+        progress_callback(0, crawl_progress_total(
+            queue, completed_pages=0, max_pages=max_pages), None)
 
     while queue and len(pages) < max_pages:
         requested_url = canonicalize_page_url(queue.popleft())

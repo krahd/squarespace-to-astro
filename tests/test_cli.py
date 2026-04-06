@@ -298,14 +298,16 @@ def test_crawl_main_skips_confirmation_prompt_with_yes(monkeypatch, tmp_path) ->
     monkeypatch.setattr(cli, "probe_site", lambda *args, **kwargs: make_probe())
     monkeypatch.setattr(cli, "crawl_site", lambda *args, **kwargs: make_snapshot())
     monkeypatch.setattr(cli, "build_report", lambda *args, **kwargs: make_report())
-    monkeypatch.setattr(cli, "estimate_snapshot_asset_download", lambda *args, **kwargs: make_asset_estimate())
+    monkeypatch.setattr(cli, "estimate_snapshot_asset_download",
+                        lambda *args, **kwargs: make_asset_estimate())
 
     def fake_download_snapshot_assets(_client, _snapshot, _output_dir, **_kwargs) -> AssetManifest:
         calls["download"] += 1
         return AssetManifest(generated_at="2026-04-05T00:00:00+00:00")
 
     monkeypatch.setattr(cli, "download_snapshot_assets", fake_download_snapshot_assets)
-    monkeypatch.setattr("builtins.input", lambda prompt: (_ for _ in ()).throw(AssertionError("input should not be called")))
+    monkeypatch.setattr("builtins.input", lambda prompt: (
+        _ for _ in ()).throw(AssertionError("input should not be called")))
 
     result = cli.main([
         "crawl",
@@ -327,7 +329,8 @@ def test_crawl_main_can_skip_asset_download_after_prompt(monkeypatch, tmp_path) 
     monkeypatch.setattr(cli, "probe_site", lambda *args, **kwargs: make_probe())
     monkeypatch.setattr(cli, "crawl_site", lambda *args, **kwargs: make_snapshot())
     monkeypatch.setattr(cli, "build_report", lambda *args, **kwargs: make_report())
-    monkeypatch.setattr(cli, "estimate_snapshot_asset_download", lambda *args, **kwargs: make_asset_estimate())
+    monkeypatch.setattr(cli, "estimate_snapshot_asset_download",
+                        lambda *args, **kwargs: make_asset_estimate())
 
     def fake_download_snapshot_assets(_client, _snapshot, _output_dir, **_kwargs) -> AssetManifest:
         calls["download"] += 1
@@ -356,7 +359,8 @@ def test_migrate_main_can_skip_asset_download_and_exit_zero(monkeypatch, tmp_pat
     monkeypatch.setattr(cli, "probe_site", lambda *args, **kwargs: make_probe())
     monkeypatch.setattr(cli, "crawl_site", lambda *args, **kwargs: make_snapshot())
     monkeypatch.setattr(cli, "build_report", lambda *args, **kwargs: make_report())
-    monkeypatch.setattr(cli, "estimate_snapshot_asset_download", lambda *args, **kwargs: make_asset_estimate())
+    monkeypatch.setattr(cli, "estimate_snapshot_asset_download",
+                        lambda *args, **kwargs: make_asset_estimate())
 
     def fake_download_snapshot_assets(_client, _snapshot, _output_dir, **_kwargs) -> AssetManifest:
         calls["download"] += 1

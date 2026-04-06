@@ -480,9 +480,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 output_dir,
                 args,
                 used_default_output_dir=used_default_output_dir,
-                artifacts=build_migrate_artifacts(output_dir, astro_dir=astro_dir, xml_import_path=xml_import_path),
+                artifacts=build_migrate_artifacts(
+                    output_dir, astro_dir=astro_dir, xml_import_path=xml_import_path),
             )
-            print_migrate_summary(console, output_dir, report, astro_dir, astro_result, asset_manifest)
+            print_migrate_summary(console, output_dir, report, astro_dir,
+                                  astro_result, asset_manifest)
             return 0
 
     return 1

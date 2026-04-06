@@ -302,7 +302,8 @@ def download_snapshot_assets(
     warnings: list[str] = []
     items: list[DownloadedAsset] = []
     page_group_indices: dict[str, dict[str, int]] = defaultdict(dict)
-    assets = estimate.assets if estimate is not None else collect_unique_squarespace_assets(snapshot)
+    assets = estimate.assets if estimate is not None else collect_unique_squarespace_assets(
+        snapshot)
     total_assets = len(assets)
 
     if progress_callback is not None:
