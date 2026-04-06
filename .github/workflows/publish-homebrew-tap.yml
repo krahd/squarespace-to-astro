@@ -1,8 +1,9 @@
 name: Publish Homebrew Tap
 
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: ["Release Binaries"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       tag:
@@ -12,11 +13,17 @@ on:
 
 jobs:
   update-homebrew-tap:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'release'
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: read
     env:
-      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.workflow_run.head_branch }}
       TAP_REPO: krahd/homebrew-tap
     steps:
       - name: Check out source repo
@@ -32,15 +39,36 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           version="${RELEASE_TAG#v}"
-          release_json=$(gh release view "$RELEASE_TAG" --json assets)
+          max_attempts=24
+          sleep_seconds=5
 
-          macos_sha=$(printf '%s' "$release_json" | jq -r --arg name "s2a-${version}-macos-arm64.tar.gz" '.assets[] | select(.name == $name) | .digest' | sed 's/^sha256://')
-          linux_sha=$(printf '%s' "$release_json" | jq -r --arg name "s2a-${version}-linux-x86_64.tar.gz" '.assets[] | select(.name == $name) | .digest' | sed 's/^sha256://')
-
-          if [[ -z "$macos_sha" || -z "$linux_sha" ]]; then
-            echo "Required release assets are missing for tag ${RELEASE_TAG}." >&2
+          if [[ -z "$version" || "$version" == "$RELEASE_TAG" ]]; then
+            echo "Could not derive a release version from tag ${RELEASE_TAG}." >&2
             exit 1
           fi
+
+          macos_name="s2a-${version}-macos-arm64.tar.gz"
+          linux_name="s2a-${version}-linux-x86_64.tar.gz"
+
+          for attempt in $(seq 1 "$max_attempts"); do
+            release_json=$(gh release view "$RELEASE_TAG" --json assets)
+
+            macos_sha=$(printf '%s' "$release_json" | jq -r --arg name "$macos_name" '.assets[] | select(.name == $name) | .digest // empty' | sed 's/^sha256://')
+            linux_sha=$(printf '%s' "$release_json" | jq -r --arg name "$linux_name" '.assets[] | select(.name == $name) | .digest // empty' | sed 's/^sha256://')
+
+            if [[ -n "$macos_sha" && -n "$linux_sha" ]]; then
+              echo "Resolved release assets for ${RELEASE_TAG} on attempt ${attempt}."
+              break
+            fi
+
+            if [[ "$attempt" -eq "$max_attempts" ]]; then
+              echo "Required release assets are missing for tag ${RELEASE_TAG}." >&2
+              exit 1
+            fi
+
+            echo "Release assets for ${RELEASE_TAG} are not ready yet; retrying in ${sleep_seconds}s (attempt ${attempt}/${max_attempts})."
+            sleep "$sleep_seconds"
+          done
 
           echo "VERSION=$version" >> "$GITHUB_ENV"
           echo "MACOS_ARM64_SHA256=$macos_sha" >> "$GITHUB_ENV"

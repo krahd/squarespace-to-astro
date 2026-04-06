@@ -31,7 +31,8 @@ def test_apply_storage_state_cookies_loads_cookies_into_httpx_client(tmp_path: P
 
 def test_rewrite_navigation_error_explains_certificate_mismatch() -> None:
     error = _rewrite_navigation_error(
-        RuntimeError("Page.goto: net::ERR_CERT_COMMON_NAME_INVALID at https://tomas.laurenzo.squarespace.com/"),
+        RuntimeError(
+            "Page.goto: net::ERR_CERT_COMMON_NAME_INVALID at https://tomas.laurenzo.squarespace.com/"),
         "https://tomas.laurenzo.squarespace.com/",
         insecure=False,
     )

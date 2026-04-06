@@ -61,10 +61,11 @@ Current bundle targets are:
 
 ## Homebrew tap publication
 
-[.github/workflows/publish-homebrew-tap.yml](.github/workflows/publish-homebrew-tap.yml) runs on release publication or manual dispatch.
+[.github/workflows/publish-homebrew-tap.yml](.github/workflows/publish-homebrew-tap.yml) runs after [.github/workflows/release-binaries.yml](.github/workflows/release-binaries.yml) completes successfully for a published release, or by manual dispatch.
 
 It:
 
+- waits for the release assets to be visible through the GitHub Releases API
 - reads the release assets for the selected tag
 - resolves the SHA256 digests for the macOS arm64 and Linux x86_64 standalone archives
 - renders `Formula/s2a.rb` with [scripts/render_homebrew_formula.py](scripts/render_homebrew_formula.py)

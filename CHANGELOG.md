@@ -6,6 +6,12 @@ The format is based on Keep a Changelog, and this project uses semantic versioni
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-04-05
+
+### Fixed in 0.2.4
+
+- Homebrew tap publication now waits for `Release Binaries` to finish and retries release-asset discovery before resolving checksums, avoiding the release-publish race that required a manual rerun for `v0.2.3`
+
 ## [0.2.3] - 2026-04-05
 
 ### Added in 0.2.3
