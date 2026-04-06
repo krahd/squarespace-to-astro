@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 import hashlib
 import mimetypes
 from pathlib import Path
 import re
+from typing import Callable
 from urllib.parse import parse_qsl, urlsplit
 
 import httpx
@@ -56,6 +58,20 @@ EXTENSION_OVERRIDES = {
     "application/pdf": ".pdf",
 }
 PLACEHOLDER_ASSET_PREFIXES = ("data:", "about:", "javascript:")
+
+ProgressCallback = Callable[[int, int, str | None], None]
+
+
+@dataclass(slots=True)
+class AssetDownloadEstimate:
+    assets: list[AssetReference]
+    estimated_size_bytes: int
+    unknown_size_count: int
+    warnings: list[str] = field(default_factory=list)
+
+    @property
+    def asset_count(self) -> int:
+        return len(self.assets)
 
 
 def extract_asset_references(soup: BeautifulSoup, base_url: str, owner_route: str) -> list[AssetReference]:
@@ -214,30 +230,94 @@ def extract_asset_references(soup: BeautifulSoup, base_url: str, owner_route: st
     return references
 
 
-def download_snapshot_assets(client: httpx.Client, snapshot: CrawlSnapshot, output_dir: Path) -> AssetManifest:
-    warnings: list[str] = []
-    downloaded: dict[str, DownloadedAsset] = {}
-    items: list[DownloadedAsset] = []
-    page_group_indices: dict[str, dict[str, int]] = defaultdict(dict)
+def collect_unique_squarespace_assets(snapshot: CrawlSnapshot) -> list[AssetReference]:
+    unique_assets: list[AssetReference] = []
+    seen_urls: set[str] = set()
 
     for page in snapshot.pages:
         for asset in page.assets:
             if not is_squarespace_asset_url(asset.source_url):
                 continue
-
-            existing = downloaded.get(asset.source_url)
-            if existing is not None:
+            if asset.source_url in seen_urls:
                 continue
+            seen_urls.add(asset.source_url)
+            unique_assets.append(asset)
 
-            sequence = page_group_sequence(page_group_indices, asset.owner_route, asset.group_key)
+    return unique_assets
 
-            try:
-                response = client.get(asset.source_url)
-                response.raise_for_status()
-            except httpx.HTTPError as exc:
-                warnings.append(f"Failed to download asset {asset.source_url}: {exc}")
-                continue
 
+def estimate_snapshot_asset_download(
+    client: httpx.Client,
+    snapshot: CrawlSnapshot,
+    progress_callback: ProgressCallback | None = None,
+) -> AssetDownloadEstimate:
+    return estimate_asset_download(
+        client,
+        collect_unique_squarespace_assets(snapshot),
+        progress_callback=progress_callback,
+    )
+
+
+def estimate_asset_download(
+    client: httpx.Client,
+    assets: list[AssetReference],
+    progress_callback: ProgressCallback | None = None,
+) -> AssetDownloadEstimate:
+    estimated_size_bytes = 0
+    unknown_size_count = 0
+    warnings: list[str] = []
+    total_assets = len(assets)
+
+    if progress_callback is not None:
+        progress_callback(0, total_assets, None)
+
+    for index, asset in enumerate(assets, start=1):
+        size_bytes, warning = estimate_asset_size_bytes(client, asset.source_url)
+        if size_bytes is None:
+            unknown_size_count += 1
+            if warning:
+                warnings.append(f"Could not estimate size for asset {asset.source_url}: {warning}")
+        else:
+            estimated_size_bytes += size_bytes
+
+        if progress_callback is not None:
+            progress_callback(index, total_assets, None)
+
+    return AssetDownloadEstimate(
+        assets=list(assets),
+        estimated_size_bytes=estimated_size_bytes,
+        unknown_size_count=unknown_size_count,
+        warnings=list(dict.fromkeys(warnings)),
+    )
+
+
+def download_snapshot_assets(
+    client: httpx.Client,
+    snapshot: CrawlSnapshot,
+    output_dir: Path,
+    *,
+    estimate: AssetDownloadEstimate | None = None,
+    progress_callback: ProgressCallback | None = None,
+) -> AssetManifest:
+    warnings: list[str] = []
+    items: list[DownloadedAsset] = []
+    page_group_indices: dict[str, dict[str, int]] = defaultdict(dict)
+    assets = estimate.assets if estimate is not None else collect_unique_squarespace_assets(
+        snapshot)
+    total_assets = len(assets)
+
+    if progress_callback is not None:
+        progress_callback(0, total_assets, None)
+
+    for index, asset in enumerate(assets, start=1):
+        sequence = page_group_sequence(page_group_indices, asset.owner_route, asset.group_key)
+
+        try:
+            response = client.get(asset.source_url)
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            warnings.append(f"Failed to download asset {asset.source_url}: {exc}")
+        else:
             content_type = response.headers.get("content-type")
             extension = extension_for_asset(str(response.url), content_type)
             filename = build_download_filename(asset, sequence, extension)
@@ -265,14 +345,52 @@ def download_snapshot_assets(client: httpx.Client, snapshot: CrawlSnapshot, outp
                 link_text=asset.link_text,
                 variant_hint=asset.variant_hint,
             )
-            downloaded[asset.source_url] = item
             items.append(item)
+
+        if progress_callback is not None:
+            progress_callback(index, total_assets, None)
 
     return AssetManifest(
         generated_at=datetime.now(UTC).isoformat(),
         items=items,
         warnings=warnings,
     )
+
+
+def estimate_asset_size_bytes(client: httpx.Client, source_url: str) -> tuple[int | None, str | None]:
+    last_error: str | None = None
+
+    try:
+        response = client.head(source_url)
+        response.raise_for_status()
+    except httpx.HTTPError as exc:
+        last_error = str(exc)
+    else:
+        content_length = parse_content_length(response.headers.get("content-length"))
+        if content_length is not None:
+            return content_length, None
+
+    try:
+        with client.stream("GET", source_url) as response:
+            response.raise_for_status()
+            content_length = parse_content_length(response.headers.get("content-length"))
+            if content_length is not None:
+                return content_length, None
+    except httpx.HTTPError as exc:
+        last_error = str(exc)
+
+    return None, last_error
+
+
+def parse_content_length(value: str | None) -> int | None:
+    if value is None:
+        return None
+
+    stripped = value.strip()
+    if not stripped.isdigit():
+        return None
+
+    return int(stripped)
 
 
 def add_srcset_references(

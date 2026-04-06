@@ -21,6 +21,7 @@ The current implementation supports these main workflows:
 
 - probing a target site for Squarespace indicators, sitemap availability, robots behavior, password gates, and `?format=json-pretty` support
 - crawling a site into a structured snapshot of pages, links, assets, headings, and opportunistic Squarespace JSON data
+- estimating and downloading Squarespace-hosted assets during `crawl` and `migrate`, with a confirmation prompt and text progress output
 - capturing browser-authenticated session state with Playwright and reusing those cookies during probe and crawl runs
 - importing Squarespace WordPress XML exports into a normalized JSON format
 - generating a buildable [Astro](https://github.com/withastro/astro) project from crawl output plus optional XML content
@@ -28,7 +29,7 @@ The current implementation supports these main workflows:
 Current boundaries:
 
 - full Squarespace admin automation is not implemented
-- asset downloading and redirect generation are still pending
+- redirect generation is still pending
 - commerce, events, forms, and members migration are not implemented
 
 ## Supported interfaces

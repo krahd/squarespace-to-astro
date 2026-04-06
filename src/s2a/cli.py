@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 import os
 import re
 from datetime import UTC, datetime
@@ -9,19 +10,89 @@ from typing import Any, Sequence
 from urllib.parse import urlsplit
 
 from s2a import __version__
-from s2a.extract.assets import download_snapshot_assets
+from s2a.extract.assets import AssetDownloadEstimate, download_snapshot_assets, estimate_snapshot_asset_download
 from s2a.extract.auth import apply_storage_state_cookies, capture_storage_state
 from s2a.extract.crawl import crawl_site
 from s2a.extract.xml_import import import_wordpress_xml
 from s2a.files import write_json
 from s2a.generate.astro import generate_astro_project
 from s2a.net import build_client
+from s2a.normalize.models import AssetManifest
 from s2a.normalize.transform import build_report
 from s2a.probe import probe_site
 
 
 EXECUTION_METADATA_FILE = "execution-metadata.json"
 SENSITIVE_ARGUMENTS = {"password", "site_password"}
+
+
+@dataclass(slots=True)
+class Console:
+    quiet: bool
+    progress_width: int = 28
+    _progress_active: bool = False
+    _last_progress_length: int = 0
+
+    def emit(self, message: str, *, always: bool = False) -> None:
+        if self.quiet and not always:
+            return
+        self.finish_progress()
+        print(message)
+
+    def prompt_confirm(
+        self,
+        message: str,
+        *,
+        assume_yes: bool = False,
+        default: bool = False,
+    ) -> bool:
+        self.finish_progress()
+        if assume_yes:
+            return True
+
+        prompt_suffix = "[Y/n]" if default else "[y/N]"
+        while True:
+            response = input(f"{message} {prompt_suffix} ").strip().lower()
+            if not response:
+                return default
+            if response in {"y", "yes"}:
+                return True
+            if response in {"n", "no"}:
+                return False
+            print("Please respond with 'y' or 'n'.")
+
+    def progress_callback(self, label: str):
+        def callback(completed: int, total: int, detail: str | None = None) -> None:
+            self.render_progress(label, completed, total, detail)
+
+        return callback
+
+    def render_progress(self, label: str, completed: int, total: int, detail: str | None = None) -> None:
+        if self.quiet or total <= 0:
+            return
+
+        safe_total = max(total, 1)
+        safe_completed = max(0, min(completed, safe_total))
+        percentage = int((safe_completed / safe_total) * 100)
+        filled_width = int((safe_completed / safe_total) * self.progress_width)
+        bar = "#" * filled_width + "-" * (self.progress_width - filled_width)
+        detail_suffix = f" {detail}" if detail else ""
+        line = f"{label:<20} [{bar}] {percentage:>3}% {safe_completed}/{safe_total}{detail_suffix}"
+        padding = " " * max(0, self._last_progress_length - len(line))
+        print(f"\r{line}{padding}", end="", flush=True)
+        self._progress_active = True
+        self._last_progress_length = len(line)
+
+        if safe_completed >= safe_total:
+            self.finish_progress()
+
+    def finish_progress(self) -> None:
+        if not self._progress_active:
+            return
+
+        print()
+        self._progress_active = False
+        self._last_progress_length = 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -35,6 +106,7 @@ def build_parser() -> argparse.ArgumentParser:
         "probe", help="Inspect a site and write a capability report.")
     add_shared_arguments(probe_parser)
     add_auth_arguments(probe_parser)
+    add_interaction_arguments(probe_parser)
     probe_parser.add_argument(
         "--max-sitemap-urls",
         type=int,
@@ -47,6 +119,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_shared_arguments(crawl_parser)
     add_auth_arguments(crawl_parser)
+    add_interaction_arguments(crawl_parser)
     crawl_parser.add_argument(
         "--max-pages",
         type=int,
@@ -66,10 +139,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_shared_arguments(auth_parser)
     add_auth_arguments(auth_parser)
+    add_interaction_arguments(auth_parser)
 
     xml_parser = subparsers.add_parser(
         "import-xml", help="Import a Squarespace WordPress XML export into normalized JSON."
     )
+    add_interaction_arguments(xml_parser)
     xml_parser.add_argument("xml_file", help="Path to the WordPress XML export file.")
     xml_parser.add_argument(
         "--output-dir",
@@ -79,6 +154,7 @@ def build_parser() -> argparse.ArgumentParser:
     astro_parser = subparsers.add_parser(
         "generate-astro", help="Generate a buildable Astro project from crawl output."
     )
+    add_interaction_arguments(astro_parser)
     astro_parser.add_argument("snapshot", help="Path to site_snapshot.json.")
     astro_parser.add_argument(
         "--output-dir",
@@ -111,6 +187,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     add_shared_arguments(migrate_parser)
     add_auth_arguments(migrate_parser)
+    add_interaction_arguments(migrate_parser)
     migrate_parser.add_argument(
         "--max-pages",
         type=int,
@@ -200,6 +277,21 @@ def add_auth_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def add_interaction_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "-y",
+        "--yes",
+        action="store_true",
+        help="Auto-confirm CLI confirmation prompts.",
+    )
+    parser.add_argument(
+        "-q",
+        "--quiet",
+        action="store_true",
+        help="Suppress progress output and final summaries while still showing prompts and fatal errors.",
+    )
+
+
 def resolve_auth_credentials(args: argparse.Namespace) -> tuple[str | None, str | None]:
     username = getattr(args, "username", None) or os.environ.get("SQUARESPACE_USER")
     password = getattr(args, "password", None) or os.environ.get("SQUARESPACE_PWD")
@@ -209,6 +301,7 @@ def resolve_auth_credentials(args: argparse.Namespace) -> tuple[str | None, str 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    console = Console(quiet=getattr(args, "quiet", False))
     output_dir, used_default_output_dir = resolve_output_dir(args)
 
     if args.command == "import-xml":
@@ -221,7 +314,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             used_default_output_dir=used_default_output_dir,
             artifacts={"xml_import": "xml_import.json"},
         )
-        print_xml_summary(output_dir, xml_import)
+        print_xml_summary(console, output_dir, xml_import)
         return 0
 
     if args.command == "generate-astro":
@@ -250,7 +343,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "asset_manifest": relative_artifact_if_exists(Path(args.snapshot).parent, output_dir),
             },
         )
-        print_astro_summary(output_dir, result)
+        print_astro_summary(console, output_dir, result)
         return 0
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -278,7 +371,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "storage_state": report.storage_state_path,
             },
         )
-        print_auth_summary(output_dir, report)
+        print_auth_summary(console, output_dir, report)
         return 0
 
     storage_state_path = prepare_storage_state(
@@ -301,36 +394,70 @@ def main(argv: Sequence[str] | None = None) -> int:
                 used_default_output_dir=used_default_output_dir,
                 artifacts=build_probe_artifacts(output_dir),
             )
-            print_probe_summary(output_dir, probe)
+            print_probe_summary(console, output_dir, probe)
             return 0
 
         if args.command == "crawl":
             probe = probe_site(client, args.target, max_sitemap_urls=args.max_sitemap_urls)
-            snapshot = crawl_site(client, probe, str(output_dir), max_pages=args.max_pages)
-            asset_manifest = download_snapshot_assets(client, snapshot, output_dir)
+            snapshot = crawl_site(
+                client,
+                probe,
+                str(output_dir),
+                max_pages=args.max_pages,
+                progress_callback=console.progress_callback("Crawling pages"),
+            )
             report = build_report(snapshot)
-            write_json(output_dir / "probe.json", probe)
-            write_json(output_dir / "site_snapshot.json", snapshot)
-            write_json(output_dir / "asset_manifest.json", asset_manifest)
-            write_json(output_dir / "report.json", report)
+            asset_manifest, asset_download_skipped = run_asset_download_workflow(
+                console,
+                client=client,
+                snapshot=snapshot,
+                output_dir=output_dir,
+                assume_yes=args.yes,
+            )
+            write_crawl_output_files(output_dir, probe, snapshot, asset_manifest, report)
             write_execution_metadata(
                 output_dir,
                 args,
                 used_default_output_dir=used_default_output_dir,
                 artifacts=build_crawl_artifacts(output_dir),
             )
-            print_crawl_summary(output_dir, report)
+            print_crawl_summary(
+                console,
+                output_dir,
+                report,
+                asset_manifest,
+                note="asset download skipped by user" if asset_download_skipped else None,
+            )
             return 0
 
         if args.command == "migrate":
             probe = probe_site(client, args.target, max_sitemap_urls=args.max_sitemap_urls)
-            snapshot = crawl_site(client, probe, str(output_dir), max_pages=args.max_pages)
-            asset_manifest = download_snapshot_assets(client, snapshot, output_dir)
+            snapshot = crawl_site(
+                client,
+                probe,
+                str(output_dir),
+                max_pages=args.max_pages,
+                progress_callback=console.progress_callback("Crawling pages"),
+            )
             report = build_report(snapshot)
-            write_json(output_dir / "probe.json", probe)
-            write_json(output_dir / "site_snapshot.json", snapshot)
-            write_json(output_dir / "asset_manifest.json", asset_manifest)
-            write_json(output_dir / "report.json", report)
+            asset_manifest, asset_download_skipped = run_asset_download_workflow(
+                console,
+                client=client,
+                snapshot=snapshot,
+                output_dir=output_dir,
+                assume_yes=args.yes,
+            )
+            write_crawl_output_files(output_dir, probe, snapshot, asset_manifest, report)
+
+            if asset_download_skipped:
+                write_execution_metadata(
+                    output_dir,
+                    args,
+                    used_default_output_dir=used_default_output_dir,
+                    artifacts=build_migrate_artifacts(output_dir),
+                )
+                print_migrate_cancelled_summary(console, output_dir, report)
+                return 0
 
             xml_import_path = None
             if args.xml_export:
@@ -353,9 +480,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 output_dir,
                 args,
                 used_default_output_dir=used_default_output_dir,
-                artifacts=build_migrate_artifacts(output_dir, astro_dir, xml_import_path),
+                artifacts=build_migrate_artifacts(
+                    output_dir, astro_dir=astro_dir, xml_import_path=xml_import_path),
             )
-            print_migrate_summary(output_dir, report, astro_dir, astro_result)
+            print_migrate_summary(console, output_dir, report, astro_dir,
+                                  astro_result, asset_manifest)
             return 0
 
     return 1
@@ -527,17 +656,18 @@ def build_crawl_artifacts(output_dir: Path) -> dict[str, str]:
 
 def build_migrate_artifacts(
     output_dir: Path,
-    astro_dir: Path,
-    xml_import_path: Path | None,
+    astro_dir: Path | None = None,
+    xml_import_path: Path | None = None,
 ) -> dict[str, str]:
     artifacts = {
         "probe": "probe.json",
         "site_snapshot": "site_snapshot.json",
         "asset_manifest": "asset_manifest.json",
         "report": "report.json",
-        "astro_generation": "astro_generation.json",
-        "astro_output_dir": relative_artifact_path(output_dir, astro_dir),
     }
+    if astro_dir is not None:
+        artifacts["astro_generation"] = "astro_generation.json"
+        artifacts["astro_output_dir"] = relative_artifact_path(output_dir, astro_dir)
     if xml_import_path:
         artifacts["xml_import"] = relative_artifact_path(output_dir, xml_import_path)
     if (output_dir / "auth.json").exists():
@@ -562,47 +692,147 @@ def relative_artifact_if_exists(snapshot_root: Path, output_dir: Path) -> str | 
         return str(asset_manifest_path)
 
 
-def print_probe_summary(output_dir: Path, probe) -> None:
-    print(
+def write_crawl_output_files(output_dir: Path, probe, snapshot, asset_manifest: AssetManifest, report) -> None:
+    write_json(output_dir / "probe.json", probe)
+    write_json(output_dir / "site_snapshot.json", snapshot)
+    write_json(output_dir / "asset_manifest.json", asset_manifest)
+    write_json(output_dir / "report.json", report)
+
+
+def run_asset_download_workflow(
+    console: Console,
+    *,
+    client,
+    snapshot,
+    output_dir: Path,
+    assume_yes: bool,
+) -> tuple[AssetManifest, bool]:
+    asset_estimate = estimate_snapshot_asset_download(
+        client,
+        snapshot,
+        progress_callback=console.progress_callback("Estimating assets"),
+    )
+
+    if asset_estimate.asset_count == 0:
+        console.emit("No Squarespace-hosted assets detected for download.")
+        return build_empty_asset_manifest(), False
+
+    estimate_message = describe_asset_download_estimate(asset_estimate)
+    if assume_yes:
+        console.emit(f"{estimate_message} Auto-confirmed by --yes.")
+    elif not console.prompt_confirm(f"{estimate_message} Continue with asset download?"):
+        return build_skipped_asset_manifest("Asset download skipped after confirmation prompt."), True
+
+    return (
+        download_snapshot_assets(
+            client,
+            snapshot,
+            output_dir,
+            estimate=asset_estimate,
+            progress_callback=console.progress_callback("Downloading assets"),
+        ),
+        False,
+    )
+
+
+def build_empty_asset_manifest() -> AssetManifest:
+    return AssetManifest(generated_at=datetime.now(UTC).isoformat())
+
+
+def build_skipped_asset_manifest(reason: str) -> AssetManifest:
+    return AssetManifest(
+        generated_at=datetime.now(UTC).isoformat(),
+        warnings=[reason],
+    )
+
+
+def describe_asset_download_estimate(asset_estimate: AssetDownloadEstimate) -> str:
+    asset_label = "asset" if asset_estimate.asset_count == 1 else "assets"
+    if asset_estimate.unknown_size_count == 0:
+        return (
+            f"Estimated asset download: {format_download_size(asset_estimate.estimated_size_bytes)} "
+            f"across {asset_estimate.asset_count} {asset_label}."
+        )
+
+    if asset_estimate.estimated_size_bytes == 0:
+        return (
+            f"Estimated asset download size is unknown across {asset_estimate.asset_count} {asset_label}; "
+            "no size metadata was available."
+        )
+
+    unknown_label = "asset has" if asset_estimate.unknown_size_count == 1 else "assets have"
+    return (
+        f"Estimated asset download: at least {format_download_size(asset_estimate.estimated_size_bytes)} "
+        f"across {asset_estimate.asset_count} {asset_label}; "
+        f"{asset_estimate.unknown_size_count} {unknown_label} unknown size metadata."
+    )
+
+
+def format_download_size(size_bytes: int) -> str:
+    if size_bytes >= 1024 ** 3:
+        return f"{size_bytes / (1024 ** 3):.2f} GB"
+    return f"{size_bytes / (1024 ** 2):.2f} MB"
+
+
+def print_probe_summary(console: Console, output_dir: Path, probe) -> None:
+    console.emit(
         f"Wrote {output_dir / 'probe.json'} | squarespace={probe.probably_squarespace} | "
         f"json={bool(probe.json_probe and probe.json_probe.available)} | sitemap_urls={len(probe.sitemap_entries)} | "
         f"metadata={output_dir / EXECUTION_METADATA_FILE}"
     )
 
 
-def print_crawl_summary(output_dir: Path, report) -> None:
-    print(
+def print_crawl_summary(
+    console: Console,
+    output_dir: Path,
+    report,
+    asset_manifest: AssetManifest,
+    *,
+    note: str | None = None,
+) -> None:
+    message = (
         f"Wrote crawl output to {output_dir} | pages={report.pages_crawled} | ok={report.ok_pages} | "
         f"json_pages={report.pages_with_json} | password_pages={report.password_gated_pages} | "
-        f"metadata={output_dir / EXECUTION_METADATA_FILE}"
+        f"downloaded_assets={len(asset_manifest.items)} | metadata={output_dir / EXECUTION_METADATA_FILE}"
     )
+    if note:
+        message = f"{message} | note={note}"
+    console.emit(message)
 
 
-def print_auth_summary(output_dir: Path, report) -> None:
-    print(
+def print_auth_summary(console: Console, output_dir: Path, report) -> None:
+    console.emit(
         f"Wrote auth output to {output_dir} | mode={report.mode} | cookies={report.cookies_saved} | "
         f"storage_state={report.storage_state_path} | metadata={output_dir / EXECUTION_METADATA_FILE}"
     )
 
 
-def print_xml_summary(output_dir: Path, xml_import) -> None:
-    print(
+def print_xml_summary(console: Console, output_dir: Path, xml_import) -> None:
+    console.emit(
         f"Wrote {output_dir / 'xml_import.json'} | items={len(xml_import.items)} | site={xml_import.site_title or 'unknown'} | "
         f"metadata={output_dir / EXECUTION_METADATA_FILE}"
     )
 
 
-def print_astro_summary(output_dir: Path, result) -> None:
-    print(
+def print_astro_summary(console: Console, output_dir: Path, result) -> None:
+    console.emit(
         f"Generated Astro project at {output_dir} | pages={result.pages_written} | posts={result.posts_written} | "
         f"manifest={result.manifest_path} | metadata={output_dir / EXECUTION_METADATA_FILE}"
     )
 
 
-def print_migrate_summary(output_dir: Path, report, astro_dir: Path, result) -> None:
-    print(
-        f"Wrote migration output to {output_dir} | crawled={report.pages_crawled} | astro_pages={result.pages_written} | "
-        f"astro_posts={result.posts_written} | astro_dir={astro_dir} | metadata={output_dir / EXECUTION_METADATA_FILE}"
+def print_migrate_summary(console: Console, output_dir: Path, report, astro_dir: Path, result, asset_manifest: AssetManifest) -> None:
+    console.emit(
+        f"Wrote migration output to {output_dir} | crawled={report.pages_crawled} | downloaded_assets={len(asset_manifest.items)} | "
+        f"astro_pages={result.pages_written} | astro_posts={result.posts_written} | astro_dir={astro_dir} | "
+        f"metadata={output_dir / EXECUTION_METADATA_FILE}"
+    )
+
+
+def print_migrate_cancelled_summary(console: Console, output_dir: Path, report) -> None:
+    console.emit(
+        f"Wrote partial migration output to {output_dir} | crawled={report.pages_crawled} | "
+        f"asset_download=skipped | astro_generation=skipped | metadata={output_dir / EXECUTION_METADATA_FILE}"
     )
 
 
