@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import deque
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Callable
 from urllib.parse import urlsplit
 
 import httpx
@@ -21,16 +22,23 @@ from s2a.url_utils import (
 )
 
 
+ProgressCallback = Callable[[int, int, str | None], None]
+
+
 def crawl_site(
     client: httpx.Client,
     probe: SiteProbe,
     output_dir: str,
     max_pages: int = 50,
+    progress_callback: ProgressCallback | None = None,
 ) -> CrawlSnapshot:
     crawl_warnings: list[str] = []
     queue = deque(seed_urls_from_probe(probe))
     visited: set[str] = set()
     pages: list[PageSnapshot] = []
+
+    if progress_callback is not None:
+        progress_callback(0, crawl_progress_total(queue, completed_pages=0, max_pages=max_pages), None)
 
     while queue and len(pages) < max_pages:
         requested_url = canonicalize_page_url(queue.popleft())
@@ -54,6 +62,12 @@ def crawl_site(
                     warnings=[fetch.error],
                 )
             )
+            if progress_callback is not None:
+                progress_callback(
+                    len(pages),
+                    crawl_progress_total(queue, completed_pages=len(pages), max_pages=max_pages),
+                    None,
+                )
             continue
 
         final_url = canonicalize_page_url(fetch.final_url or requested_url)
@@ -121,6 +135,13 @@ def crawl_site(
             )
         )
 
+        if progress_callback is not None:
+            progress_callback(
+                len(pages),
+                crawl_progress_total(queue, completed_pages=len(pages), max_pages=max_pages),
+                None,
+            )
+
     if len(pages) >= max_pages and queue:
         crawl_warnings.append(
             f"Stopped after reaching the max-pages limit ({max_pages}); additional internal URLs remain uncrawled."
@@ -134,6 +155,10 @@ def crawl_site(
         pages=pages,
         warnings=crawl_warnings,
     )
+
+
+def crawl_progress_total(queue: deque[str], *, completed_pages: int, max_pages: int) -> int:
+    return max(completed_pages, min(max_pages, completed_pages + len(queue)))
 
 
 def seed_urls_from_probe(probe: SiteProbe) -> list[str]:
@@ -186,6 +211,8 @@ def extract_links(
             external_links.append(absolute)
 
     return list(dict.fromkeys(internal_links)), list(dict.fromkeys(external_links))
+
+
 def detect_page_indicators(html: str, soup: BeautifulSoup) -> list[str]:
     indicators: list[str] = []
     lowered_html = html.lower()

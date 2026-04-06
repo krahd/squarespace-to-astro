@@ -2,7 +2,8 @@ import argparse
 from pathlib import Path
 
 import s2a.cli as cli
-from s2a.normalize.models import AuthCaptureReport
+from s2a.extract.assets import AssetDownloadEstimate
+from s2a.normalize.models import AssetManifest, AssetReference, AuthCaptureReport, CrawlReport, CrawlSnapshot, SiteProbe
 
 
 def make_auth_namespace(
@@ -19,6 +20,8 @@ def make_auth_namespace(
     manual_auth: bool = False,
     auth_headless: bool = True,
     insecure: bool = False,
+    yes: bool = False,
+    quiet: bool = False,
 ) -> argparse.Namespace:
     return argparse.Namespace(
         command=command,
@@ -33,6 +36,74 @@ def make_auth_namespace(
         manual_auth=manual_auth,
         auth_headless=auth_headless,
         insecure=insecure,
+        yes=yes,
+        quiet=quiet,
+    )
+
+
+class DummyClientContext:
+    def __init__(self, client: object | None = None) -> None:
+        self.client = client if client is not None else object()
+
+    def __enter__(self) -> object:
+        return self.client
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+
+def make_probe() -> SiteProbe:
+    return SiteProbe(
+        target_url="https://example.com",
+        final_home_url="https://example.com",
+        site_origin="https://example.com",
+        homepage_status_code=200,
+        homepage_title="Example",
+        probably_squarespace=True,
+    )
+
+
+def make_snapshot() -> CrawlSnapshot:
+    probe = make_probe()
+    return CrawlSnapshot(
+        generated_at="2026-04-05T00:00:00+00:00",
+        target_url=probe.target_url,
+        base_url=probe.final_home_url or probe.target_url,
+        probe=probe,
+        pages=[],
+    )
+
+
+def make_report() -> CrawlReport:
+    return CrawlReport(
+        generated_at="2026-04-05T00:00:00+00:00",
+        target_url="https://example.com",
+        probably_squarespace=True,
+        version_hint="7.1",
+        pages_crawled=3,
+        ok_pages=3,
+        pages_with_json=2,
+        password_gated_pages=0,
+        unique_assets=1,
+        unique_internal_links=3,
+        sitemap_entries=3,
+    )
+
+
+def make_asset_estimate() -> AssetDownloadEstimate:
+    return AssetDownloadEstimate(
+        assets=[
+            AssetReference(
+                source_url="https://images.squarespace-cdn.com/content/hero.jpg?w=1200",
+                asset_type="image",
+                attribute="src",
+                owner_route="/",
+                group_key="img-1",
+                variant_hint="large",
+            )
+        ],
+        estimated_size_bytes=5 * 1024 * 1024,
+        unknown_size_count=0,
     )
 
 
@@ -200,3 +271,132 @@ def test_build_execution_metadata_redacts_sensitive_arguments() -> None:
     assert metadata["parameters"]["password"] == "<redacted>"
     assert metadata["parameters"]["site_password"] == "<redacted>"
     assert metadata["artifacts"] == {"report": "report.json"}
+
+
+def test_build_parser_accepts_yes_and_quiet_flags_for_all_commands() -> None:
+    parser = cli.build_parser()
+    command_vectors = [
+        ["probe", "https://example.com"],
+        ["crawl", "https://example.com"],
+        ["auth-browser", "https://example.com"],
+        ["import-xml", "example.xml"],
+        ["generate-astro", "site_snapshot.json"],
+        ["migrate", "https://example.com"],
+    ]
+
+    for command_vector in command_vectors:
+        args = parser.parse_args([*command_vector, "--yes", "--quiet"])
+        assert args.yes is True
+        assert args.quiet is True
+
+
+def test_crawl_main_skips_confirmation_prompt_with_yes(monkeypatch, tmp_path) -> None:
+    calls = {"download": 0}
+
+    monkeypatch.setattr(cli, "build_client", lambda *args, **kwargs: DummyClientContext())
+    monkeypatch.setattr(cli, "prepare_storage_state", lambda *args, **kwargs: None)
+    monkeypatch.setattr(cli, "probe_site", lambda *args, **kwargs: make_probe())
+    monkeypatch.setattr(cli, "crawl_site", lambda *args, **kwargs: make_snapshot())
+    monkeypatch.setattr(cli, "build_report", lambda *args, **kwargs: make_report())
+    monkeypatch.setattr(cli, "estimate_snapshot_asset_download", lambda *args, **kwargs: make_asset_estimate())
+
+    def fake_download_snapshot_assets(_client, _snapshot, _output_dir, **_kwargs) -> AssetManifest:
+        calls["download"] += 1
+        return AssetManifest(generated_at="2026-04-05T00:00:00+00:00")
+
+    monkeypatch.setattr(cli, "download_snapshot_assets", fake_download_snapshot_assets)
+    monkeypatch.setattr("builtins.input", lambda prompt: (_ for _ in ()).throw(AssertionError("input should not be called")))
+
+    result = cli.main([
+        "crawl",
+        "https://example.com",
+        "--output-dir",
+        str(tmp_path),
+        "--yes",
+    ])
+
+    assert result == 0
+    assert calls["download"] == 1
+
+
+def test_crawl_main_can_skip_asset_download_after_prompt(monkeypatch, tmp_path) -> None:
+    calls = {"download": 0}
+
+    monkeypatch.setattr(cli, "build_client", lambda *args, **kwargs: DummyClientContext())
+    monkeypatch.setattr(cli, "prepare_storage_state", lambda *args, **kwargs: None)
+    monkeypatch.setattr(cli, "probe_site", lambda *args, **kwargs: make_probe())
+    monkeypatch.setattr(cli, "crawl_site", lambda *args, **kwargs: make_snapshot())
+    monkeypatch.setattr(cli, "build_report", lambda *args, **kwargs: make_report())
+    monkeypatch.setattr(cli, "estimate_snapshot_asset_download", lambda *args, **kwargs: make_asset_estimate())
+
+    def fake_download_snapshot_assets(_client, _snapshot, _output_dir, **_kwargs) -> AssetManifest:
+        calls["download"] += 1
+        return AssetManifest(generated_at="2026-04-05T00:00:00+00:00")
+
+    monkeypatch.setattr(cli, "download_snapshot_assets", fake_download_snapshot_assets)
+    monkeypatch.setattr("builtins.input", lambda prompt: "n")
+
+    result = cli.main([
+        "crawl",
+        "https://example.com",
+        "--output-dir",
+        str(tmp_path),
+    ])
+
+    assert result == 0
+    assert calls["download"] == 0
+    assert (tmp_path / "asset_manifest.json").exists()
+
+
+def test_migrate_main_can_skip_asset_download_and_exit_zero(monkeypatch, tmp_path) -> None:
+    calls = {"download": 0, "astro": 0}
+
+    monkeypatch.setattr(cli, "build_client", lambda *args, **kwargs: DummyClientContext())
+    monkeypatch.setattr(cli, "prepare_storage_state", lambda *args, **kwargs: None)
+    monkeypatch.setattr(cli, "probe_site", lambda *args, **kwargs: make_probe())
+    monkeypatch.setattr(cli, "crawl_site", lambda *args, **kwargs: make_snapshot())
+    monkeypatch.setattr(cli, "build_report", lambda *args, **kwargs: make_report())
+    monkeypatch.setattr(cli, "estimate_snapshot_asset_download", lambda *args, **kwargs: make_asset_estimate())
+
+    def fake_download_snapshot_assets(_client, _snapshot, _output_dir, **_kwargs) -> AssetManifest:
+        calls["download"] += 1
+        return AssetManifest(generated_at="2026-04-05T00:00:00+00:00")
+
+    def fake_generate_astro_project(*args, **kwargs):
+        calls["astro"] += 1
+        raise AssertionError("generate_astro_project should not be called")
+
+    monkeypatch.setattr(cli, "download_snapshot_assets", fake_download_snapshot_assets)
+    monkeypatch.setattr(cli, "generate_astro_project", fake_generate_astro_project)
+    monkeypatch.setattr("builtins.input", lambda prompt: "n")
+
+    result = cli.main([
+        "migrate",
+        "https://example.com",
+        "--output-dir",
+        str(tmp_path),
+    ])
+
+    assert result == 0
+    assert calls["download"] == 0
+    assert calls["astro"] == 0
+    assert (tmp_path / "asset_manifest.json").exists()
+
+
+def test_probe_main_quiet_suppresses_summary_output(monkeypatch, tmp_path, capsys) -> None:
+    monkeypatch.setattr(cli, "build_client", lambda *args, **kwargs: DummyClientContext())
+    monkeypatch.setattr(cli, "prepare_storage_state", lambda *args, **kwargs: None)
+    monkeypatch.setattr(cli, "probe_site", lambda *args, **kwargs: make_probe())
+
+    result = cli.main([
+        "probe",
+        "https://example.com",
+        "--output-dir",
+        str(tmp_path),
+        "--quiet",
+    ])
+
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert captured.out == ""

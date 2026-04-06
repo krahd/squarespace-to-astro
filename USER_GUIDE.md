@@ -39,9 +39,11 @@ If you need to run s2a from source instead of using Homebrew or the standalone b
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install "git+https://github.com/krahd/squarespace-to-astro.git@v0.2.5"
+pip install "git+https://github.com/krahd/squarespace-to-astro.git@v0.3.0"
 python -m playwright install chromium
 ```
+
+Replace the tag with the version you actually want to install if you are not targeting the latest release branch.
 
 ## First migration
 
@@ -70,6 +72,12 @@ site-output/20260405-153000-migrate-example-com/
 
 If you want a stable location for repeated runs, pass `--output-dir` explicitly.
 
+During `crawl` and `migrate`, s2a now estimates the Squarespace-hosted asset download size after page discovery and asks for confirmation before downloading those assets.
+
+- use `-y` or `--yes` to auto-confirm that prompt for non-interactive runs
+- use `-q` or `--quiet` to suppress progress bars and final summaries while still allowing prompts and fatal errors
+- if you decline the prompt, s2a keeps the crawl artifacts it already wrote; `migrate` stops before Astro generation for that run
+
 ## Authentication and private content
 
 For account-authenticated areas, export your Squarespace credentials before running `auth-browser`, `probe`, `crawl`, or `migrate`:
@@ -86,6 +94,7 @@ Behavior notes:
 - Plain public runs do not auto-start browser auth just because those environment variables are set.
 - `--username` and `--password` override those environment variables for one-off runs.
 - `--site-password` is only for a site-wide Squarespace password gate. It is separate from account login.
+- `--yes` only auto-confirms CLI download prompts; it does not bypass `--manual-auth`.
 - `--insecure` disables TLS certificate verification for both Playwright auth capture and later HTTP crawl requests. Use it only after confirming the URL is correct.
 - The automated browser-auth flow does not support interactive 2FA prompts.
 
@@ -122,7 +131,9 @@ The other files depend on the command you run.
 
 - `probe.json`
 - `site_snapshot.json`
+- `asset_manifest.json`
 - `report.json`
+- `downloaded-assets/`
 - `raw-html/`
 - `raw-json/`
 
@@ -206,4 +217,4 @@ s2a does not currently migrate:
 - events
 - members-only systems
 - full Squarespace admin automation
-- asset downloading and redirect generation
+- redirect generation

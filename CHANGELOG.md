@@ -6,6 +6,19 @@ The format is based on Keep a Changelog, and this project uses semantic versioni
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-04-05
+
+### Added in 0.3.0
+
+- default asset-download size estimation and confirmation for `crawl` and `migrate`
+- `-y` / `--yes` to auto-confirm CLI download prompts for non-interactive runs
+- text progress bars for page crawling, asset-size estimation, and asset downloading
+
+### Changed in 0.3.0
+
+- `-q` / `--quiet` now suppresses progress output and final summaries while still allowing prompts and fatal errors
+- declining the asset-download confirmation keeps the crawl artifacts already written and stops the remaining asset-download work for that run
+
 ## [0.2.5] - 2026-04-05
 
 ### Fixed in 0.2.5

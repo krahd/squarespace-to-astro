@@ -3,7 +3,7 @@ from pathlib import Path
 import httpx
 from bs4 import BeautifulSoup
 
-from s2a.extract.assets import download_snapshot_assets, extract_asset_references
+from s2a.extract.assets import download_snapshot_assets, estimate_snapshot_asset_download, extract_asset_references
 from s2a.normalize.models import AssetReference, CrawlSnapshot, PageSnapshot, SiteProbe
 
 
@@ -180,13 +180,98 @@ def test_download_snapshot_assets_downloads_squarespace_assets_with_friendly_nam
             raise AssertionError(f"Unexpected request for {request.url}")
         return response
 
+    progress_updates: list[tuple[int, int, str | None]] = []
+
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-        manifest = download_snapshot_assets(client, snapshot, tmp_path)
+        manifest = download_snapshot_assets(
+            client,
+            snapshot,
+            tmp_path,
+            progress_callback=lambda completed, total, detail: progress_updates.append((completed, total, detail)),
+        )
 
     assert [item.public_path for item in manifest.items] == [
         "/assets/images/media-1-small.jpg",
         "/assets/files/media-file-2-pricing-guide.pdf",
     ]
     assert manifest.warnings == []
+    assert progress_updates == [(0, 2, None), (1, 2, None), (2, 2, None)]
     assert (tmp_path / "downloaded-assets/images/media-1-small.jpg").read_bytes() == b"image-bytes"
     assert (tmp_path / "downloaded-assets/files/media-file-2-pricing-guide.pdf").read_bytes() == b"%PDF-1.7"
+
+
+def test_estimate_snapshot_asset_download_uses_unique_squarespace_assets_and_tracks_unknown_sizes() -> None:
+    snapshot = CrawlSnapshot(
+        generated_at="2026-04-05T00:00:00+00:00",
+        target_url="https://example.com/",
+        base_url="https://example.com/",
+        probe=SiteProbe(
+            target_url="https://example.com/",
+            final_home_url="https://example.com/",
+            site_origin="https://example.com",
+            homepage_status_code=200,
+            homepage_title="Example Site",
+            probably_squarespace=True,
+        ),
+        pages=[
+            PageSnapshot(
+                requested_url="https://example.com/media",
+                final_url="https://example.com/media",
+                status_code=200,
+                content_type="text/html",
+                title="Media",
+                meta_description=None,
+                canonical_url="https://example.com/media",
+                assets=[
+                    AssetReference(
+                        source_url="https://images.squarespace-cdn.com/content/hero.jpg?w=300",
+                        asset_type="image",
+                        attribute="src",
+                        owner_route="/media",
+                        group_key="img-1",
+                        variant_hint="small",
+                    ),
+                    AssetReference(
+                        source_url="https://images.squarespace-cdn.com/content/hero.jpg?w=300",
+                        asset_type="image",
+                        attribute="srcset",
+                        owner_route="/media",
+                        group_key="img-1",
+                        variant_hint="large",
+                    ),
+                    AssetReference(
+                        source_url="https://static1.squarespace.com/files/pricing-guide.pdf",
+                        asset_type="file",
+                        attribute="href",
+                        owner_route="/media",
+                        group_key="a-2",
+                        link_text="Pricing Guide",
+                        variant_hint="file",
+                    ),
+                ],
+            )
+        ],
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "HEAD" and str(request.url) == "https://images.squarespace-cdn.com/content/hero.jpg?w=300":
+            return httpx.Response(200, headers={"content-length": str(3 * 1024 * 1024)})
+        if request.method == "HEAD" and str(request.url) == "https://static1.squarespace.com/files/pricing-guide.pdf":
+            return httpx.Response(200, headers={})
+        if request.method == "GET" and str(request.url) == "https://static1.squarespace.com/files/pricing-guide.pdf":
+            return httpx.Response(200, headers={})
+        raise AssertionError(f"Unexpected {request.method} request for {request.url}")
+
+    progress_updates: list[tuple[int, int, str | None]] = []
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        estimate = estimate_snapshot_asset_download(
+            client,
+            snapshot,
+            progress_callback=lambda completed, total, detail: progress_updates.append((completed, total, detail)),
+        )
+
+    assert estimate.asset_count == 2
+    assert estimate.estimated_size_bytes == 3 * 1024 * 1024
+    assert estimate.unknown_size_count == 1
+    assert progress_updates == [(0, 2, None), (1, 2, None), (2, 2, None)]
