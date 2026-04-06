@@ -2,18 +2,40 @@
 
 ## Quick start
 
-1. Create and activate a virtual environment.
-2. Install the package and Playwright Chromium.
-3. Export `SQUARESPACE_USER` and `SQUARESPACE_PWD` if you need account-authenticated access.
-4. Run `s2a migrate` against the target site.
-5. Open the generated [Astro](https://github.com/withastro/astro) project and continue editing there.
+Choose one install path first:
+
+Homebrew on macOS arm64 or Linux x86_64:
+
+```bash
+brew tap krahd/tap
+brew install s2a
+```
+
+Git-based install pinned to the current release tag:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install "git+https://github.com/krahd/squarespace-to-astro.git@v0.2.2"
+python -m playwright install chromium
+```
+
+Editable install for local development in a clone of this repo:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .[dev]
 python -m playwright install chromium
+```
 
+After installation:
+
+1. Export `SQUARESPACE_USER` and `SQUARESPACE_PWD` if you need account-authenticated access.
+2. Run `s2a migrate` against the target site.
+3. Open the generated [Astro](https://github.com/withastro/astro) project and continue editing there.
+
+```bash
 export SQUARESPACE_USER=owner@example.com
 export SQUARESPACE_PWD=owner-password
 

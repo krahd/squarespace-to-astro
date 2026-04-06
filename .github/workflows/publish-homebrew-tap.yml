@@ -1,0 +1,84 @@
+name: Publish Homebrew Tap
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish to the shared Homebrew tap
+        required: true
+        type: string
+
+jobs:
+  update-homebrew-tap:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}
+      TAP_REPO: krahd/homebrew-tap
+    steps:
+      - name: Check out source repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Resolve release metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${RELEASE_TAG#v}"
+          release_json=$(gh release view "$RELEASE_TAG" --json assets)
+
+          macos_sha=$(printf '%s' "$release_json" | jq -r --arg name "s2a-${version}-macos-arm64.tar.gz" '.assets[] | select(.name == $name) | .digest' | sed 's/^sha256://')
+          linux_sha=$(printf '%s' "$release_json" | jq -r --arg name "s2a-${version}-linux-x86_64.tar.gz" '.assets[] | select(.name == $name) | .digest' | sed 's/^sha256://')
+
+          if [[ -z "$macos_sha" || -z "$linux_sha" ]]; then
+            echo "Required release assets are missing for tag ${RELEASE_TAG}." >&2
+            exit 1
+          fi
+
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "MACOS_ARM64_SHA256=$macos_sha" >> "$GITHUB_ENV"
+          echo "LINUX_X86_64_SHA256=$linux_sha" >> "$GITHUB_ENV"
+
+      - name: Clone shared tap repo
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [[ -z "$HOMEBREW_TAP_TOKEN" ]]; then
+            echo "HOMEBREW_TAP_TOKEN is not configured." >&2
+            exit 1
+          fi
+
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/${TAP_REPO}.git" tap-repo
+
+      - name: Render formula
+        run: |
+          mkdir -p tap-repo/Formula
+          python scripts/render_homebrew_formula.py \
+            --version "$VERSION" \
+            --macos-arm64-sha256 "$MACOS_ARM64_SHA256" \
+            --linux-x86-64-sha256 "$LINUX_X86_64_SHA256" \
+            --output tap-repo/Formula/s2a.rb
+
+      - name: Commit and push tap update
+        working-directory: tap-repo
+        env:
+          RELEASE_TAG: ${{ env.RELEASE_TAG }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet -- Formula/s2a.rb; then
+            echo "Formula already up to date."
+            exit 0
+          fi
+
+          git add Formula/s2a.rb
+          git commit -m "Update s2a formula for ${RELEASE_TAG}"
+          git push origin HEAD

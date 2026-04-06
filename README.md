@@ -20,6 +20,26 @@ Still not implemented:
 
 ## Install
 
+Homebrew install for the shared tap (`krahd/homebrew-tap`) is available on macOS arm64 and Linux x86_64:
+
+```bash
+brew tap krahd/tap
+brew install s2a
+```
+
+That install path uses the bundled binary release, so it does not require a separate Python install or `python -m playwright install chromium`.
+
+Git-based install pinned to the current release tag:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install "git+https://github.com/krahd/squarespace-to-astro.git@v0.2.2"
+python -m playwright install chromium
+```
+
+Local editable install for development in a clone of this repository:
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate
