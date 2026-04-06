@@ -9,6 +9,7 @@ from typing import Any, Sequence
 from urllib.parse import urlsplit
 
 from s2a import __version__
+from s2a.extract.assets import download_snapshot_assets
 from s2a.extract.auth import apply_storage_state_cookies, capture_storage_state
 from s2a.extract.crawl import crawl_site
 from s2a.extract.xml_import import import_wordpress_xml
@@ -241,6 +242,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             artifacts={
                 "astro_generation": "astro_generation.json",
                 "migration_manifest": "migration-manifest.json",
+                "asset_manifest": relative_artifact_if_exists(Path(args.snapshot).parent, output_dir),
             },
         )
         print_astro_summary(output_dir, result)
@@ -299,9 +301,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "crawl":
             probe = probe_site(client, args.target, max_sitemap_urls=args.max_sitemap_urls)
             snapshot = crawl_site(client, probe, str(output_dir), max_pages=args.max_pages)
+            asset_manifest = download_snapshot_assets(client, snapshot, output_dir)
             report = build_report(snapshot)
             write_json(output_dir / "probe.json", probe)
             write_json(output_dir / "site_snapshot.json", snapshot)
+            write_json(output_dir / "asset_manifest.json", asset_manifest)
             write_json(output_dir / "report.json", report)
             write_execution_metadata(
                 output_dir,
@@ -315,9 +319,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "migrate":
             probe = probe_site(client, args.target, max_sitemap_urls=args.max_sitemap_urls)
             snapshot = crawl_site(client, probe, str(output_dir), max_pages=args.max_pages)
+            asset_manifest = download_snapshot_assets(client, snapshot, output_dir)
             report = build_report(snapshot)
             write_json(output_dir / "probe.json", probe)
             write_json(output_dir / "site_snapshot.json", snapshot)
+            write_json(output_dir / "asset_manifest.json", asset_manifest)
             write_json(output_dir / "report.json", report)
 
             xml_import_path = None
@@ -500,6 +506,7 @@ def build_crawl_artifacts(output_dir: Path) -> dict[str, str]:
     artifacts = {
         "probe": "probe.json",
         "site_snapshot": "site_snapshot.json",
+        "asset_manifest": "asset_manifest.json",
         "report": "report.json",
     }
     if (output_dir / "auth.json").exists():
@@ -515,6 +522,7 @@ def build_migrate_artifacts(
     artifacts = {
         "probe": "probe.json",
         "site_snapshot": "site_snapshot.json",
+        "asset_manifest": "asset_manifest.json",
         "report": "report.json",
         "astro_generation": "astro_generation.json",
         "astro_output_dir": relative_artifact_path(output_dir, astro_dir),
@@ -531,6 +539,16 @@ def relative_artifact_path(output_dir: Path, artifact_path: Path) -> str:
         return str(artifact_path.relative_to(output_dir))
     except ValueError:
         return str(artifact_path)
+
+
+def relative_artifact_if_exists(snapshot_root: Path, output_dir: Path) -> str | None:
+    asset_manifest_path = snapshot_root / "asset_manifest.json"
+    if not asset_manifest_path.exists():
+        return None
+    try:
+        return str(asset_manifest_path.relative_to(output_dir))
+    except ValueError:
+        return str(asset_manifest_path)
 
 
 def print_probe_summary(output_dir: Path, probe) -> None:

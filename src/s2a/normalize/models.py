@@ -15,6 +15,47 @@ class JsonDataProbe:
 
 
 @dataclass(slots=True)
+class AssetReference:
+    source_url: str
+    asset_type: str
+    attribute: str
+    owner_route: str
+    group_key: str
+    source_tag: str | None = None
+    alt_text: str | None = None
+    caption: str | None = None
+    link_text: str | None = None
+    variant_hint: str | None = None
+
+
+@dataclass(slots=True)
+class DownloadedAsset:
+    source_url: str
+    final_url: str
+    asset_type: str
+    owner_route: str
+    group_key: str
+    filename: str
+    local_path: str
+    public_path: str
+    content_type: str | None = None
+    size_bytes: int | None = None
+    sha256: str | None = None
+    alt_text: str | None = None
+    caption: str | None = None
+    link_text: str | None = None
+    variant_hint: str | None = None
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class AssetManifest:
+    generated_at: str
+    items: list[DownloadedAsset] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
 class SiteProbe:
     target_url: str
     final_home_url: str | None
@@ -51,6 +92,7 @@ class PageSnapshot:
     internal_links: list[str] = field(default_factory=list)
     external_links: list[str] = field(default_factory=list)
     asset_urls: list[str] = field(default_factory=list)
+    assets: list[AssetReference] = field(default_factory=list)
     squarespace_indicators: list[str] = field(default_factory=list)
     password_gate_detected: bool = False
     json_probe: JsonDataProbe | None = None

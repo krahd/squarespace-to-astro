@@ -7,6 +7,7 @@ import httpx
 
 from s2a.files import read_json
 from s2a.normalize.models import AuthCaptureReport
+from s2a.runtime import configure_bundled_playwright_environment
 from s2a.url_utils import coerce_url
 
 
@@ -25,6 +26,8 @@ def capture_storage_state(
     manual: bool = False,
     headless: bool = True,
 ) -> AuthCaptureReport:
+    configure_bundled_playwright_environment()
+
     try:
         from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
         from playwright.sync_api import sync_playwright

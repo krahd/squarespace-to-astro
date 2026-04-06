@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "squarespace-to-astro"
-version = "0.2.1"
+version = "0.2.2"
 description = "Probe and crawl Squarespace sites into a static-site migration snapshot."
 readme = "README.md"
 license = "MIT"
@@ -48,6 +48,7 @@ Issues = "https://github.com/krahd/squarespace-to-astro/issues"
 [project.optional-dependencies]
 dev = [
   "build>=1,<2",
+  "pyinstaller>=6,<7",
   "pytest>=8,<9",
 ]
 

@@ -5,9 +5,10 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 import re
+import shutil
 from urllib.parse import urlsplit
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 from markdownify import markdownify
 import yaml
 
@@ -38,12 +39,21 @@ def generate_astro_project(
 ) -> AstroGenerationResult:
     snapshot = read_json(snapshot_path)
     xml_import = read_json(xml_import_path) if xml_import_path else None
+    asset_manifest_path = snapshot_path.parent / "asset_manifest.json"
+    asset_manifest = read_json(asset_manifest_path) if asset_manifest_path.exists() else None
 
-    manifest = build_astro_manifest(snapshot, snapshot_path.parent, xml_import)
+    manifest = build_astro_manifest(snapshot, snapshot_path.parent, xml_import, asset_manifest)
     if site_url:
         manifest.base_url = site_url.rstrip("/")
 
-    write_project(output_dir, manifest, base_path=base_path, project_name=project_name)
+    write_project(
+        output_dir,
+        manifest,
+        base_path=base_path,
+        project_name=project_name,
+        snapshot_root=snapshot_path.parent,
+        asset_manifest=asset_manifest,
+    )
     write_json(output_dir / "migration-manifest.json", manifest)
 
     return AstroGenerationResult(
@@ -60,6 +70,7 @@ def build_astro_manifest(
     snapshot: dict,
     snapshot_root: Path,
     xml_import: dict | None,
+    asset_manifest: dict | None,
 ) -> AstroManifest:
     probe = snapshot.get("probe", {})
     page_snapshots = snapshot.get("pages", [])
@@ -87,9 +98,12 @@ def build_astro_manifest(
             if is_utility_route(route_path_for_page(page))
         }
     )
+    asset_lookup = build_asset_lookup(asset_manifest)
 
-    pages = build_page_entries(page_snapshots, snapshot_root, xml_items, blog_base_path, site_title)
-    posts = build_post_entries(page_snapshots, snapshot_root, xml_items, blog_base_path, site_title)
+    pages = build_page_entries(page_snapshots, snapshot_root, xml_items,
+                               blog_base_path, site_title, asset_lookup)
+    posts = build_post_entries(page_snapshots, snapshot_root, xml_items,
+                               blog_base_path, site_title, asset_lookup)
     navigation = build_navigation(snapshot, page_snapshots, pages, posts,
                                   blog_base_path, blog_title, site_title)
     warnings: list[str] = []
@@ -123,6 +137,9 @@ def build_astro_manifest(
             + ", ".join(skipped_utility_routes)
         )
 
+    if asset_manifest and asset_manifest.get("warnings"):
+        warnings.extend(asset_manifest.get("warnings", []))
+
     return AstroManifest(
         generated_at=datetime.now(UTC).isoformat(),
         site_title=site_title,
@@ -143,6 +160,7 @@ def build_page_entries(
     xml_items: list[dict],
     blog_base_path: str,
     site_title: str,
+    asset_lookup: dict[str, str],
 ) -> list[GeneratedContentEntry]:
     entries: dict[str, GeneratedContentEntry] = {}
     xml_pages = {
@@ -163,10 +181,13 @@ def build_page_entries(
         if is_post_path(route_path, blog_base_path):
             continue
 
-        entry = generated_entry_from_snapshot(page, snapshot_root, route_path, site_title)
+        entry = generated_entry_from_snapshot(
+            page, snapshot_root, route_path, site_title, asset_lookup)
         xml_page = xml_pages.pop(route_path, None)
         if xml_page and xml_page.get("content_html"):
-            body, body_format = body_from_html(xml_page.get("content_html"))
+            body, body_format = body_from_html(
+                localize_content_html(xml_page.get("content_html"), asset_lookup)
+            )
             entry = replace(
                 entry,
                 title=clean_title(xml_page.get("title") or entry.title, site_title),
@@ -185,7 +206,8 @@ def build_page_entries(
             continue
         if is_post_path(route_path, blog_base_path):
             continue
-        entries[route_path] = generated_entry_from_xml_item(xml_page, route_path, site_title)
+        entries[route_path] = generated_entry_from_xml_item(
+            xml_page, route_path, site_title, asset_lookup)
 
     ordered = sorted(entries.values(), key=lambda entry: (not entry.home, entry.route_path))
     return ordered
@@ -197,6 +219,7 @@ def build_post_entries(
     xml_items: list[dict],
     blog_base_path: str,
     site_title: str,
+    asset_lookup: dict[str, str],
 ) -> list[GeneratedContentEntry]:
     entries: dict[str, GeneratedContentEntry] = {}
 
@@ -210,7 +233,7 @@ def build_post_entries(
             route_path = normalize_path(
                 f"{blog_base_path}/{xml_item.get('slug') or route_path.strip('/')}")
         entries[route_path] = generated_post_from_xml_item(
-            xml_item, route_path, blog_base_path, site_title)
+            xml_item, route_path, blog_base_path, site_title, asset_lookup)
 
     for page in page_snapshots:
         route_path = route_path_for_page(page)
@@ -221,7 +244,7 @@ def build_post_entries(
         if route_path in entries:
             continue
         entries[route_path] = generated_post_from_snapshot(
-            page, snapshot_root, route_path, blog_base_path, site_title)
+            page, snapshot_root, route_path, blog_base_path, site_title, asset_lookup)
 
     return sorted(
         entries.values(),
@@ -235,8 +258,9 @@ def generated_entry_from_snapshot(
     snapshot_root: Path,
     route_path: str,
     site_title: str,
+    asset_lookup: dict[str, str],
 ) -> GeneratedContentEntry:
-    html_fragment = html_from_snapshot(page, snapshot_root)
+    html_fragment = localize_content_html(html_from_snapshot(page, snapshot_root), asset_lookup)
     body, body_format = body_from_html(html_fragment)
     title = clean_title(page.get("title") or label_from_path(route_path), site_title)
     source_url = page.get("final_url") or page.get("requested_url")
@@ -260,9 +284,18 @@ def generated_entry_from_snapshot(
     )
 
 
-def generated_entry_from_xml_item(xml_item: dict, route_path: str, site_title: str) -> GeneratedContentEntry:
-    body, body_format = body_from_html(xml_item.get(
-        "content_html") or xml_item.get("excerpt_html") or "")
+def generated_entry_from_xml_item(
+    xml_item: dict,
+    route_path: str,
+    site_title: str,
+    asset_lookup: dict[str, str],
+) -> GeneratedContentEntry:
+    body, body_format = body_from_html(
+        localize_content_html(
+            xml_item.get("content_html") or xml_item.get("excerpt_html") or "",
+            asset_lookup,
+        )
+    )
     title = clean_title(xml_item.get("title") or label_from_path(route_path), site_title)
 
     if not body:
@@ -289,8 +322,9 @@ def generated_post_from_snapshot(
     route_path: str,
     blog_base_path: str,
     site_title: str,
+    asset_lookup: dict[str, str],
 ) -> GeneratedContentEntry:
-    html_fragment = html_from_snapshot(page, snapshot_root)
+    html_fragment = localize_content_html(html_from_snapshot(page, snapshot_root), asset_lookup)
     body, body_format = body_from_html(html_fragment)
     title = clean_title(page.get("title") or label_from_path(route_path), site_title)
     source_url = page.get("final_url") or page.get("requested_url")
@@ -319,9 +353,14 @@ def generated_post_from_xml_item(
     route_path: str,
     blog_base_path: str,
     site_title: str,
+    asset_lookup: dict[str, str],
 ) -> GeneratedContentEntry:
-    body, body_format = body_from_html(xml_item.get(
-        "content_html") or xml_item.get("excerpt_html") or "")
+    body, body_format = body_from_html(
+        localize_content_html(
+            xml_item.get("content_html") or xml_item.get("excerpt_html") or "",
+            asset_lookup,
+        )
+    )
     title = clean_title(xml_item.get("title") or label_from_path(route_path), site_title)
 
     if not body:
@@ -401,6 +440,8 @@ def write_project(
     manifest: AstroManifest,
     base_path: str | None,
     project_name: str | None,
+    snapshot_root: Path,
+    asset_manifest: dict | None,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     write_json(output_dir / "package.json", render_package_json(manifest, project_name))
@@ -413,6 +454,7 @@ def write_project(
     write_json(output_dir / "src/data/site.json", render_site_data(manifest))
     write_text(output_dir / "src/pages/index.astro", render_home_page())
     write_text(output_dir / "src/pages/[...slug].astro", render_generic_page())
+    copy_localized_assets(output_dir, snapshot_root, asset_manifest)
 
     if manifest.posts:
         blog_segments = [segment for segment in manifest.blog_base_path.strip(
@@ -1288,6 +1330,186 @@ def remove_noise(fragment: BeautifulSoup) -> None:
         marker = f"{classes} {element_id}".strip()
         if marker and NOISE_PATTERN.search(marker):
             element.decompose()
+
+
+def build_asset_lookup(asset_manifest: dict | None) -> dict[str, str]:
+    if not asset_manifest:
+        return {}
+
+    lookup: dict[str, str] = {}
+    for item in asset_manifest.get("items", []):
+        public_path = item.get("public_path")
+        source_url = item.get("source_url")
+        final_url = item.get("final_url")
+        if not public_path:
+            continue
+        if source_url:
+            lookup[str(source_url)] = str(public_path)
+        if final_url:
+            lookup[str(final_url)] = str(public_path)
+    return lookup
+
+
+def copy_localized_assets(output_dir: Path, snapshot_root: Path, asset_manifest: dict | None) -> None:
+    if not asset_manifest:
+        return
+
+    for item in asset_manifest.get("items", []):
+        local_path = item.get("local_path")
+        public_path = item.get("public_path")
+        if not local_path or not public_path:
+            continue
+
+        source_path = snapshot_root / str(local_path)
+        if not source_path.exists():
+            continue
+
+        target_path = output_dir / "public" / str(public_path).lstrip("/")
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_path, target_path)
+
+
+def localize_content_html(html: str, asset_lookup: dict[str, str]) -> str:
+    if not html or not asset_lookup:
+        return html
+
+    fragment = BeautifulSoup(html, "html.parser")
+    rewrite_asset_attributes(fragment, asset_lookup)
+    rewrite_video_audio_blocks(fragment, asset_lookup)
+    return fragment.decode().strip()
+
+
+def rewrite_asset_attributes(fragment: BeautifulSoup, asset_lookup: dict[str, str]) -> None:
+    for tag in fragment.find_all("img"):
+        rewrite_primary_attribute(tag, "src", ("src", "data-src", "data-image"), asset_lookup)
+        rewrite_srcset_attribute(tag, ("srcset", "data-srcset"), asset_lookup)
+
+    for tag in fragment.find_all("source"):
+        rewrite_primary_attribute(tag, "src", ("src", "data-src"), asset_lookup)
+        rewrite_srcset_attribute(tag, ("srcset", "data-srcset"), asset_lookup)
+
+    for tag in fragment.find_all("video"):
+        rewrite_primary_attribute(tag, "src", ("src", "data-src"), asset_lookup)
+        rewrite_primary_attribute(tag, "poster", ("poster", "data-poster"), asset_lookup)
+
+    for tag in fragment.find_all("audio"):
+        rewrite_primary_attribute(tag, "src", ("src", "data-src"), asset_lookup)
+
+    for tag in fragment.find_all("a"):
+        rewrite_primary_attribute(tag, "href", ("href",), asset_lookup)
+
+    for tag in fragment.find_all(True):
+        style_value = tag.get("style")
+        if style_value:
+            tag["style"] = rewrite_style_urls(style_value, asset_lookup)
+
+
+def rewrite_video_audio_blocks(fragment: BeautifulSoup, asset_lookup: dict[str, str]) -> None:
+    for tag_name, label in (("video", "Video"), ("audio", "Audio")):
+        for media in list(fragment.find_all(tag_name)):
+            replacement = BeautifulSoup("", "html.parser")
+            wrapper = replacement.new_tag("figure")
+            wrapper["class"] = f"s2a-{tag_name}"
+
+            poster = media.get("poster")
+            localized_poster = asset_lookup.get(poster or "", poster)
+            if localized_poster:
+                poster_tag = replacement.new_tag("img", src=localized_poster)
+                poster_tag["alt"] = media.get("aria-label") or f"{label} poster"
+                wrapper.append(poster_tag)
+
+            media_url = media.get("src")
+            if not media_url:
+                source_tag = media.find("source", src=True)
+                if source_tag:
+                    media_url = source_tag.get("src")
+
+            localized_media_url = asset_lookup.get(media_url or "", media_url)
+            if localized_media_url:
+                paragraph = replacement.new_tag("p")
+                anchor = replacement.new_tag("a", href=localized_media_url)
+                anchor.string = media.get("aria-label") or f"{label} download"
+                paragraph.append(anchor)
+                wrapper.append(paragraph)
+
+            if not wrapper.contents:
+                placeholder = replacement.new_tag("p")
+                placeholder.string = f"{label} content requires manual review."
+                wrapper.append(placeholder)
+
+            media.replace_with(wrapper)
+
+
+def rewrite_primary_attribute(
+    tag: Tag,
+    target_attribute: str,
+    candidate_attributes: tuple[str, ...],
+    asset_lookup: dict[str, str],
+) -> None:
+    chosen_value: str | None = None
+
+    for attribute in candidate_attributes:
+        value = tag.get(attribute)
+        if not value:
+            continue
+        chosen_value = asset_lookup.get(value, value)
+        if not is_placeholder_asset_value(value):
+            break
+
+    if chosen_value:
+        tag[target_attribute] = chosen_value
+
+    for attribute in candidate_attributes:
+        if attribute != target_attribute:
+            tag.attrs.pop(attribute, None)
+
+
+def rewrite_srcset_attribute(
+    tag: Tag,
+    candidate_attributes: tuple[str, ...],
+    asset_lookup: dict[str, str],
+) -> None:
+    for attribute in candidate_attributes:
+        value = tag.get(attribute)
+        if not value:
+            continue
+        tag["srcset"] = rewrite_srcset(value, asset_lookup)
+        break
+
+    for attribute in candidate_attributes:
+        if attribute != "srcset":
+            tag.attrs.pop(attribute, None)
+
+
+def rewrite_srcset(value: str, asset_lookup: dict[str, str]) -> str:
+    rewritten: list[str] = []
+    for candidate in value.split(","):
+        cleaned = candidate.strip()
+        if not cleaned:
+            continue
+        parts = cleaned.split()
+        url = parts[0]
+        descriptor = f" {parts[1]}" if len(parts) > 1 else ""
+        rewritten.append(f"{asset_lookup.get(url, url)}{descriptor}")
+    return ", ".join(rewritten)
+
+
+def rewrite_style_urls(value: str, asset_lookup: dict[str, str]) -> str:
+    def replace_url(match: re.Match[str]) -> str:
+        original = match.group("url")
+        localized = asset_lookup.get(original, original)
+        return f"url('{localized}')"
+
+    return re.sub(r"url\((['\"]?)(?P<url>[^)'\"]+)\1\)", replace_url, value)
+
+
+def is_placeholder_asset_value(value: str) -> bool:
+    lowered = value.strip().lower()
+    if not lowered:
+        return True
+    if lowered in {"#", "about:blank"}:
+        return True
+    return lowered.startswith(("data:", "about:", "javascript:"))
 
 
 def body_from_html(html: str) -> tuple[str, str]:

@@ -2,7 +2,14 @@ from pathlib import Path
 
 from s2a.files import read_json, write_json, write_text
 from s2a.generate.astro import extract_main_html, generate_astro_project
-from s2a.normalize.models import CrawlSnapshot, JsonDataProbe, PageSnapshot, SiteProbe
+from s2a.normalize.models import (
+    AssetManifest,
+    CrawlSnapshot,
+    DownloadedAsset,
+    JsonDataProbe,
+    PageSnapshot,
+    SiteProbe,
+)
 
 
 def test_generate_astro_project_creates_pages_posts_and_manifest(tmp_path: Path) -> None:
@@ -296,3 +303,144 @@ def test_generate_astro_project_skips_utility_routes(tmp_path: Path) -> None:
     assert all(item["url"] != "/cart" for item in manifest["navigation"])
     assert not (output_dir / "src/content/pages/cart.md").exists()
     assert any("/cart" in warning for warning in result.warnings)
+
+
+def test_generate_astro_project_localizes_asset_urls_and_copies_downloads(tmp_path: Path) -> None:
+    snapshot_dir = tmp_path / "snapshot"
+    raw_html_dir = snapshot_dir / "raw-html"
+    raw_html_dir.mkdir(parents=True)
+
+    write_text(
+        raw_html_dir / "media.html",
+        """
+        <html>
+          <body>
+            <main>
+              <h1>Media</h1>
+                            <p>
+                                <img
+                                    src="data:image/gif;base64,abc123"
+                                    data-src="https://images.squarespace-cdn.com/content/hero.jpg"
+                                    alt="Hero image"
+                                />
+                            </p>
+              <p><a href="https://static1.squarespace.com/files/brochure.pdf">Brochure</a></p>
+              <video poster="https://images.squarespace-cdn.com/content/poster.jpg">
+                <source src="https://static1.squarespace.com/media/clip.mp4" />
+              </video>
+            </main>
+          </body>
+        </html>
+        """,
+    )
+
+    downloaded_files = {
+        "downloaded-assets/images/media-1-original.jpg": b"hero-bytes",
+        "downloaded-assets/files/media-file-2-brochure.pdf": b"brochure-bytes",
+        "downloaded-assets/images/media-3-poster.jpg": b"poster-bytes",
+        "downloaded-assets/videos/media-4-original.mp4": b"video-bytes",
+    }
+    for relative_path, content in downloaded_files.items():
+        file_path = snapshot_dir / relative_path
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_bytes(content)
+
+    write_json(
+        snapshot_dir / "asset_manifest.json",
+        AssetManifest(
+            generated_at="2026-04-05T00:00:00+00:00",
+            items=[
+                DownloadedAsset(
+                    source_url="https://images.squarespace-cdn.com/content/hero.jpg",
+                    final_url="https://images.squarespace-cdn.com/content/hero.jpg",
+                    asset_type="image",
+                    owner_route="/media",
+                    group_key="img-1",
+                    filename="media-1-original.jpg",
+                    local_path="downloaded-assets/images/media-1-original.jpg",
+                    public_path="/assets/images/media-1-original.jpg",
+                ),
+                DownloadedAsset(
+                    source_url="https://static1.squarespace.com/files/brochure.pdf",
+                    final_url="https://static1.squarespace.com/files/brochure.pdf",
+                    asset_type="file",
+                    owner_route="/media",
+                    group_key="a-2",
+                    filename="media-file-2-brochure.pdf",
+                    local_path="downloaded-assets/files/media-file-2-brochure.pdf",
+                    public_path="/assets/files/media-file-2-brochure.pdf",
+                ),
+                DownloadedAsset(
+                    source_url="https://images.squarespace-cdn.com/content/poster.jpg",
+                    final_url="https://images.squarespace-cdn.com/content/poster.jpg",
+                    asset_type="image",
+                    owner_route="/media",
+                    group_key="video-3",
+                    filename="media-3-poster.jpg",
+                    local_path="downloaded-assets/images/media-3-poster.jpg",
+                    public_path="/assets/images/media-3-poster.jpg",
+                ),
+                DownloadedAsset(
+                    source_url="https://static1.squarespace.com/media/clip.mp4",
+                    final_url="https://static1.squarespace.com/media/clip.mp4",
+                    asset_type="video",
+                    owner_route="/media",
+                    group_key="video-3",
+                    filename="media-4-original.mp4",
+                    local_path="downloaded-assets/videos/media-4-original.mp4",
+                    public_path="/assets/videos/media-4-original.mp4",
+                ),
+            ],
+        ),
+    )
+
+    probe = SiteProbe(
+        target_url="https://example.com/",
+        final_home_url="https://example.com/",
+        site_origin="https://example.com",
+        homepage_status_code=200,
+        homepage_title="Example Site",
+        probably_squarespace=True,
+        homepage_links=[
+            "https://example.com/",
+            "https://example.com/media",
+        ],
+    )
+    snapshot = CrawlSnapshot(
+        generated_at="2026-04-05T00:00:00+00:00",
+        target_url="https://example.com/",
+        base_url="https://example.com/",
+        probe=probe,
+        pages=[
+            PageSnapshot(
+                requested_url="https://example.com/media",
+                final_url="https://example.com/media",
+                status_code=200,
+                content_type="text/html",
+                title="Media — Example Site",
+                meta_description="Media description",
+                canonical_url="https://example.com/media",
+                raw_html_path="raw-html/media.html",
+            ),
+        ],
+    )
+
+    snapshot_path = snapshot_dir / "site_snapshot.json"
+    write_json(snapshot_path, snapshot)
+
+    output_dir = tmp_path / "astro-site"
+    result = generate_astro_project(snapshot_path, output_dir, site_url="https://example.com")
+    content = (output_dir / "src/content/pages/media.md").read_text(encoding="utf-8")
+
+    assert result.pages_written == 2
+    assert "/assets/images/media-1-original.jpg" in content
+    assert "/assets/files/media-file-2-brochure.pdf" in content
+    assert "/assets/images/media-3-poster.jpg" in content
+    assert "/assets/videos/media-4-original.mp4" in content
+    assert "data:image/gif" not in content
+    assert "images.squarespace-cdn.com" not in content
+    assert "static1.squarespace.com" not in content
+    assert (output_dir / "public/assets/images/media-1-original.jpg").read_bytes() == b"hero-bytes"
+    assert (output_dir / "public/assets/files/media-file-2-brochure.pdf").read_bytes() == b"brochure-bytes"
+    assert (output_dir / "public/assets/images/media-3-poster.jpg").read_bytes() == b"poster-bytes"
+    assert (output_dir / "public/assets/videos/media-4-original.mp4").read_bytes() == b"video-bytes"

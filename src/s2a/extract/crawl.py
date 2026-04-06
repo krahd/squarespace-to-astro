@@ -3,10 +3,12 @@ from __future__ import annotations
 from collections import deque
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import httpx
 from bs4 import BeautifulSoup
 
+from s2a.extract.assets import extract_asset_references
 from s2a.extract.json_data import probe_json_data
 from s2a.files import write_json, write_text
 from s2a.net import fetch_text, is_html_content_type
@@ -64,6 +66,7 @@ def crawl_site(
         internal_links: list[str] = []
         external_links: list[str] = []
         asset_urls: list[str] = []
+        assets = []
         squarespace_indicators: list[str] = []
         password_gate_detected = False
         json_probe = None
@@ -81,7 +84,9 @@ def crawl_site(
             headings = [heading.get_text(" ", strip=True)
                         for heading in soup.find_all(["h1", "h2", "h3"])]
             internal_links, external_links = extract_links(soup, final_url, probe.site_origin)
-            asset_urls = extract_assets(soup, final_url)
+            owner_route = urlsplit(final_url).path or "/"
+            assets = extract_asset_references(soup, final_url, owner_route)
+            asset_urls = list(dict.fromkeys(asset.source_url for asset in assets))
             squarespace_indicators = detect_page_indicators(fetch.text, soup)
             password_gate_detected = detect_page_password_gate(soup)
 
@@ -106,6 +111,7 @@ def crawl_site(
                 internal_links=internal_links,
                 external_links=external_links,
                 asset_urls=asset_urls,
+                assets=assets,
                 squarespace_indicators=squarespace_indicators,
                 password_gate_detected=password_gate_detected,
                 json_probe=json_probe,
@@ -180,20 +186,6 @@ def extract_links(
             external_links.append(absolute)
 
     return list(dict.fromkeys(internal_links)), list(dict.fromkeys(external_links))
-
-
-def extract_assets(soup: BeautifulSoup, base_url: str) -> list[str]:
-    assets: list[str] = []
-
-    for tag_name, attribute in (("img", "src"), ("script", "src"), ("link", "href"), ("source", "src")):
-        for tag in soup.find_all(tag_name):
-            value = tag.get(attribute)
-            if value:
-                assets.append(make_absolute_url(base_url, value))
-
-    return list(dict.fromkeys(assets))
-
-
 def detect_page_indicators(html: str, soup: BeautifulSoup) -> list[str]:
     indicators: list[str] = []
     lowered_html = html.lower()

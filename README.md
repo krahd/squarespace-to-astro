@@ -27,6 +27,12 @@ pip install -e .[dev]
 python -m playwright install chromium
 ```
 
+## Binary Releases
+
+Prebuilt CLI bundles for Linux, macOS, and Windows are attached to GitHub Releases. Those bundles include a Chromium browser payload for `auth-browser`, so you do not need a separate Python install to run the binary distribution.
+
+Download the archive for your platform from the Releases page, unpack it, and run the bundled `s2a` executable.
+
 See `USER_GUIDE.md` for a step-by-step workflow, generated [Astro](https://github.com/withastro/astro) editing notes, and output-folder conventions.
 
 Developer overview page: [krahd.github.io/squarespace-to-astro](https://krahd.github.io/squarespace-to-astro/).
