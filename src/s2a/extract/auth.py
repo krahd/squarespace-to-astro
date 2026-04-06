@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -25,10 +26,12 @@ def capture_storage_state(
     password: str | None = None,
     manual: bool = False,
     headless: bool = True,
+    insecure: bool = False,
 ) -> AuthCaptureReport:
     configure_bundled_playwright_environment()
 
     try:
+        from playwright.sync_api import Error as PlaywrightError
         from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
         from playwright.sync_api import sync_playwright
     except ImportError as exc:  # pragma: no cover - depends on environment setup
@@ -43,6 +46,8 @@ def capture_storage_state(
     if manual and headless:
         headless = False
         warnings.append("Manual auth requires a visible browser, so headless mode was disabled.")
+    if insecure:
+        warnings.append("TLS certificate verification was disabled for browser auth capture.")
 
     auth_dir = output_dir / "auth"
     auth_dir.mkdir(parents=True, exist_ok=True)
@@ -52,37 +57,45 @@ def capture_storage_state(
 
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=headless)
-        context = browser.new_context()
-        page = context.new_page()
-        page.goto(login_url, wait_until="domcontentloaded", timeout=30_000)
-
-        if site_password:
-            mode = "site-password"
-            password_field = page.locator(DEFAULT_PASSWORD_SELECTOR).first
-            password_field.wait_for(timeout=10_000)
-            password_field.fill(site_password)
-            click_submit(page)
-        elif username and password:
-            mode = "credentials"
-            username_field = page.locator(DEFAULT_USERNAME_SELECTOR).first
-            password_field = page.locator(DEFAULT_PASSWORD_SELECTOR).first
-            username_field.wait_for(timeout=10_000)
-            password_field.wait_for(timeout=10_000)
-            username_field.fill(username)
-            password_field.fill(password)
-            click_submit(page)
-
-        if manual:
-            input("Complete the login flow in the browser, then press Enter to save storage state... ")
-
         try:
-            page.wait_for_load_state("networkidle", timeout=10_000)
-        except PlaywrightTimeoutError:
-            warnings.append(
-                "Browser auth capture timed out waiting for a fully idle page, but storage state was still saved.")
+            context = browser.new_context(ignore_https_errors=insecure)
+            page = context.new_page()
+            try:
+                page.goto(login_url, wait_until="domcontentloaded", timeout=30_000)
+            except PlaywrightError as exc:
+                rewritten_error = _rewrite_navigation_error(exc, login_url, insecure=insecure)
+                if rewritten_error is not None:
+                    raise rewritten_error from exc
+                raise
 
-        context.storage_state(path=str(storage_state_path))
-        browser.close()
+            if site_password:
+                mode = "site-password"
+                password_field = page.locator(DEFAULT_PASSWORD_SELECTOR).first
+                password_field.wait_for(timeout=10_000)
+                password_field.fill(site_password)
+                click_submit(page)
+            elif username and password:
+                mode = "credentials"
+                username_field = page.locator(DEFAULT_USERNAME_SELECTOR).first
+                password_field = page.locator(DEFAULT_PASSWORD_SELECTOR).first
+                username_field.wait_for(timeout=10_000)
+                password_field.wait_for(timeout=10_000)
+                username_field.fill(username)
+                password_field.fill(password)
+                click_submit(page)
+
+            if manual:
+                input("Complete the login flow in the browser, then press Enter to save storage state... ")
+
+            try:
+                page.wait_for_load_state("networkidle", timeout=10_000)
+            except PlaywrightTimeoutError:
+                warnings.append(
+                    "Browser auth capture timed out waiting for a fully idle page, but storage state was still saved.")
+
+            context.storage_state(path=str(storage_state_path))
+        finally:
+            browser.close()
 
     state = read_json(storage_state_path)
     cookies_saved = len(state.get("cookies", []))
@@ -105,6 +118,38 @@ def click_submit(page) -> None:
         submit.click()
     else:
         page.keyboard.press("Enter")
+
+
+def _rewrite_navigation_error(
+    exc: Exception,
+    url: str,
+    *,
+    insecure: bool,
+) -> RuntimeError | None:
+    message = str(exc)
+    if "ERR_CERT_" not in message:
+        return None
+
+    host = urlsplit(url).hostname or url
+    guidance = [
+        f"TLS certificate validation failed while opening {url}.",
+        f"The server certificate does not match {host} or is otherwise invalid.",
+        "Check that the target URL or --login-url value is correct.",
+    ]
+
+    if host.endswith(".squarespace.com"):
+        preview_prefix = host[: -len(".squarespace.com")]
+        if "." in preview_prefix:
+            guidance.append(
+                "Squarespace preview domains usually look like https://site.squarespace.com, not a multi-label subdomain."
+            )
+
+    if not insecure:
+        guidance.append(
+            "If you intentionally need to connect to a host with a broken certificate, rerun with --insecure."
+        )
+
+    return RuntimeError(" ".join(guidance))
 
 
 def apply_storage_state_cookies(client: httpx.Client, storage_state_path: Path) -> None:

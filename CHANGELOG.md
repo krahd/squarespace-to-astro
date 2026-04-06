@@ -6,6 +6,16 @@ The format is based on Keep a Changelog, and this project uses semantic versioni
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-04-05
+
+### Added in 0.2.3
+
+- `--insecure` support for browser auth capture and crawl requests when a site has a known-bad TLS certificate
+
+### Fixed in 0.2.3
+
+- browser auth capture now reports actionable guidance for certificate hostname mismatches instead of surfacing a raw Playwright exception
+
 ## [0.2.2] - 2026-04-05
 
 ### Added in 0.2.2

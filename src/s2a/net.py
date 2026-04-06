@@ -21,11 +21,12 @@ class TextFetch:
     error: str | None = None
 
 
-def build_client(timeout: float) -> httpx.Client:
+def build_client(timeout: float, verify: bool = True) -> httpx.Client:
     return httpx.Client(
         follow_redirects=True,
         headers=DEFAULT_HEADERS,
         timeout=httpx.Timeout(timeout),
+        verify=verify,
     )
 
 

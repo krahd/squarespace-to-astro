@@ -18,6 +18,7 @@ def make_auth_namespace(
     password: str | None = None,
     manual_auth: bool = False,
     auth_headless: bool = True,
+    insecure: bool = False,
 ) -> argparse.Namespace:
     return argparse.Namespace(
         command=command,
@@ -31,6 +32,7 @@ def make_auth_namespace(
         password=password,
         manual_auth=manual_auth,
         auth_headless=auth_headless,
+        insecure=insecure,
     )
 
 
@@ -81,6 +83,35 @@ def test_auth_browser_main_uses_resolved_env_credentials(monkeypatch, tmp_path) 
     assert result == 0
     assert calls["username"] == "env@example.com"
     assert calls["password"] == "env-password"
+
+
+def test_auth_browser_main_passes_insecure_flag(monkeypatch, tmp_path) -> None:
+    calls: dict[str, object] = {}
+
+    def fake_capture_storage_state(**kwargs) -> AuthCaptureReport:
+        calls.update(kwargs)
+        return AuthCaptureReport(
+            generated_at="2026-04-05T00:00:00+00:00",
+            target_url="https://example.com",
+            login_url="https://example.com",
+            storage_state_path="auth/storage_state.json",
+            mode="passthrough",
+            cookies_saved=0,
+            headless=True,
+        )
+
+    monkeypatch.setattr(cli, "capture_storage_state", fake_capture_storage_state)
+
+    result = cli.main([
+        "auth-browser",
+        "https://example.com",
+        "--output-dir",
+        str(tmp_path),
+        "--insecure",
+    ])
+
+    assert result == 0
+    assert calls["insecure"] is True
 
 
 def test_prepare_storage_state_uses_resolved_env_credentials(monkeypatch, tmp_path) -> None:

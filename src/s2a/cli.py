@@ -159,6 +159,11 @@ def add_shared_arguments(parser: argparse.ArgumentParser) -> None:
         default=10.0,
         help="Per-request timeout in seconds.",
     )
+    parser.add_argument(
+        "--insecure",
+        action="store_true",
+        help="Disable TLS certificate verification for browser auth capture and crawl requests. Use only after confirming the URL is correct.",
+    )
 
 
 def add_auth_arguments(parser: argparse.ArgumentParser) -> None:
@@ -261,6 +266,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             password=password,
             manual=args.manual_auth,
             headless=args.auth_headless,
+            insecure=args.insecure,
         )
         write_json(output_dir / "auth.json", report)
         write_execution_metadata(
@@ -282,7 +288,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         password=password,
     )
 
-    with build_client(args.timeout) as client:
+    with build_client(args.timeout, verify=not args.insecure) as client:
         if storage_state_path:
             apply_storage_state_cookies(client, storage_state_path)
 
@@ -388,6 +394,7 @@ def prepare_storage_state(
         password=password,
         manual=args.manual_auth,
         headless=args.auth_headless,
+        insecure=args.insecure,
     )
     write_json(output_dir / "auth.json", report)
     return output_dir / report.storage_state_path

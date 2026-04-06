@@ -39,7 +39,7 @@ If you need to run s2a from source instead of using Homebrew or the standalone b
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install "git+https://github.com/krahd/squarespace-to-astro.git@v0.2.2"
+pip install "git+https://github.com/krahd/squarespace-to-astro.git@v0.2.3"
 python -m playwright install chromium
 ```
 
@@ -84,6 +84,7 @@ Behavior notes:
 - `SQUARESPACE_USER` and `SQUARESPACE_PWD` are the default credentials for `auth-browser`, `probe`, `crawl`, and `migrate`.
 - `--username` and `--password` override those environment variables for one-off runs.
 - `--site-password` is only for a site-wide Squarespace password gate. It is separate from account login.
+- `--insecure` disables TLS certificate verification for both Playwright auth capture and later HTTP crawl requests. Use it only after confirming the URL is correct.
 - The automated browser-auth flow does not support interactive 2FA prompts.
 
 If you want to capture a browser session first and reuse it later:
@@ -190,6 +191,8 @@ Most hand edits happen in these locations:
 - Homebrew support currently covers macOS arm64 and Linux x86_64. Use the standalone release archive or source install on other platforms.
 - The binary bundles are large because they include a Playwright Chromium payload for `auth-browser`.
 - `python -m playwright install chromium` is only required for source-based installs.
+- If you see `ERR_CERT_COMMON_NAME_INVALID`, verify the site URL first. Squarespace preview domains usually look like `https://site.squarespace.com`; a multi-label host such as `https://foo.bar.squarespace.com` will not match Squarespace's wildcard certificate.
+- If the URL is correct but the site still presents a broken certificate, rerun the command with `--insecure`.
 - Utility routes such as `/cart`, `/checkout`, and `/account` are intentionally skipped during Astro generation.
 
 ## Current migration boundaries
