@@ -1,44 +1,58 @@
 # squarespace-to-astro (s2a)
 
-Python tooling for migrating a Squarespace site into a static-site-friendly content snapshot, with [Astro](https://github.com/withastro/astro) as the intended downstream renderer.
+`s2a` is a Python CLI for extracting content from Squarespace and generating an editable [Astro](https://github.com/withastro/astro) project. This README is the repository entry point for developers, contributors, and advanced users who want to run the project from source or understand how the codebase is organized.
 
-## Current status
+For end-user installation and day-to-day usage:
 
-This repository currently implements the first milestone:
+- Project website: [krahd.github.io/squarespace-to-astro](https://krahd.github.io/squarespace-to-astro/)
+- Detailed usage guide: [USER_GUIDE.md](USER_GUIDE.md)
 
-- Probe a target site for Squarespace indicators, sitemap availability, robots rules, RSS feeds, password gates, and `?format=json-pretty` support.
-- Crawl a site into a structured snapshot of pages, links, assets, headings, and opportunistic Squarespace JSON data.
-- Capture browser-authenticated session state with Playwright and reuse those cookies during probe and crawl runs.
-- Import Squarespace WordPress XML exports into a normalized JSON format.
-- Generate a buildable [Astro](https://github.com/withastro/astro) project from crawl output plus optional XML content.
+## Documentation map
 
-Still not implemented:
+- [USER_GUIDE.md](USER_GUIDE.md): end-user installation, migration workflow, and generated Astro editing
+- [CONTRIBUTING.md](CONTRIBUTING.md): contributor setup and pull request expectations
+- [DEVELOPMENT.md](DEVELOPMENT.md): codebase layout, architecture, testing, and distribution tooling
+- [RELEASE.md](RELEASE.md): versioning, tagging, binary publishing, and Homebrew tap publication
+- [CHANGELOG.md](CHANGELOG.md): released changes by version
 
-- Full Squarespace admin automation.
-- Asset downloading and redirect generation.
-- Commerce, events, forms, and members migration.
+## Project status
 
-## Install
+The current implementation supports these main workflows:
 
-Homebrew install for the shared tap (`krahd/homebrew-tap`) is available on macOS arm64 and Linux x86_64:
+- probing a target site for Squarespace indicators, sitemap availability, robots behavior, password gates, and `?format=json-pretty` support
+- crawling a site into a structured snapshot of pages, links, assets, headings, and opportunistic Squarespace JSON data
+- capturing browser-authenticated session state with Playwright and reusing those cookies during probe and crawl runs
+- importing Squarespace WordPress XML exports into a normalized JSON format
+- generating a buildable [Astro](https://github.com/withastro/astro) project from crawl output plus optional XML content
 
-```bash
-brew tap krahd/tap
-brew install s2a
-```
+Current boundaries:
 
-That install path uses the bundled binary release, so it does not require a separate Python install or `python -m playwright install chromium`.
+- full Squarespace admin automation is not implemented
+- asset downloading and redirect generation are still pending
+- commerce, events, forms, and members migration are not implemented
 
-Git-based install pinned to the current release tag:
+## Supported interfaces
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install "git+https://github.com/krahd/squarespace-to-astro.git@v0.2.2"
-python -m playwright install chromium
-```
+The supported interface for external use is the `s2a` CLI.
 
-Local editable install for development in a clone of this repository:
+The Python modules under `src/s2a/` are intended primarily as implementation details for the CLI and may change between releases. If you import them directly in your own code, pin the project version and review the relevant module before depending on internal behavior.
+
+## Repository layout
+
+- `src/s2a/cli.py`: CLI entry point and command definitions
+- `src/s2a/extract/`: HTTP crawling, browser auth capture, XML import, and asset handling
+- `src/s2a/normalize/`: report building and data normalization
+- `src/s2a/generate/`: Astro project generation
+- `scripts/build_binary_release.py`: PyInstaller bundle and standalone release archive builder
+- `scripts/render_homebrew_formula.py`: Homebrew formula renderer from release metadata
+- `.github/workflows/release-binaries.yml`: GitHub Actions workflow for binary bundle publication
+- `.github/workflows/publish-homebrew-tap.yml`: GitHub Actions workflow for tap synchronization
+- `tests/`: CLI, generator, auth, XML import, asset, and runtime tests
+- `docs/`: static project website published from the repository
+
+## Development quickstart
+
+Python 3.11 or newer is required.
 
 ```bash
 python -m venv .venv
@@ -47,123 +61,60 @@ pip install -e .[dev]
 python -m playwright install chromium
 ```
 
-## Binary Releases
-
-Prebuilt CLI bundles for Linux, macOS, and Windows are attached to GitHub Releases. Those bundles include a Chromium browser payload for `auth-browser`, so you do not need a separate Python install to run the binary distribution.
-
-Download the archive for your platform from the Releases page, unpack it, and run the bundled `s2a` executable.
-
-See `USER_GUIDE.md` for a step-by-step workflow, generated [Astro](https://github.com/withastro/astro) editing notes, and output-folder conventions.
-
-Developer overview page: [krahd.github.io/squarespace-to-astro](https://krahd.github.io/squarespace-to-astro/).
-
-## Authentication
-
-For Squarespace account login, export credentials before running `auth-browser`, `probe`, `crawl`, or `migrate`:
+Once installed, check the CLI entry point:
 
 ```bash
-export SQUARESPACE_USER=owner@example.com
-export SQUARESPACE_PWD=owner-password
+s2a --help
 ```
 
-Those commands will use `SQUARESPACE_USER` and `SQUARESPACE_PWD` when `--username` and `--password` are not provided. Use the flags for one-off runs; they override the environment variables.
+## Running tests
 
-To access private Squarespace areas with the automated browser-auth flow, the Squarespace account used by this tool must have two-factor authentication (2FA) disabled. The current auth flow does not handle interactive 2FA challenges.
-
-`--site-password` is separate. It submits a site-wide Squarespace password gate and does not use `SQUARESPACE_USER` or `SQUARESPACE_PWD`.
-
-## Commands
-
-If you omit `--output-dir` for `probe`, `crawl`, `auth-browser`, `import-xml`, or `migrate`, the CLI creates a unique run folder under `site-output/` and writes `execution-metadata.json` alongside the generated artifacts.
-
-Probe a site and write a capability report:
+Run the automated test suite with:
 
 ```bash
-s2a probe https://example.squarespace.com --output-dir ./site-output/example
+python -m pytest
 ```
 
-Crawl a site and write a structured snapshot plus summary report:
+For release-related smoke testing, build the standalone bundle after installing Playwright Chromium and pointing `PLAYWRIGHT_BROWSERS_PATH` at the installed browser cache:
 
 ```bash
-s2a crawl https://example.squarespace.com --output-dir ./site-output/example --max-pages 75
+PLAYWRIGHT_BROWSERS_PATH="$HOME/Library/Caches/ms-playwright" \
+python scripts/build_binary_release.py
 ```
 
-Capture a browser storage state for Squarespace account login:
+See [DEVELOPMENT.md](DEVELOPMENT.md) for a fuller explanation of the test layout, output directories, and build artifacts.
 
-```bash
-s2a auth-browser https://example.squarespace.com --output-dir ./site-output/example
-```
+## CLI workflows
 
-Use a site-wide Squarespace password gate instead:
+The CLI exposes five main user-facing workflows plus the combined migration command:
 
-```bash
-s2a auth-browser https://example.squarespace.com --output-dir ./site-output/example --site-password 'secret-pass'
-```
+- `s2a probe`
+- `s2a crawl`
+- `s2a auth-browser`
+- `s2a import-xml`
+- `s2a generate-astro`
+- `s2a migrate`
 
-Import a Squarespace WordPress XML export:
+Usage examples and end-user task flows live in [USER_GUIDE.md](USER_GUIDE.md). The authoritative command definitions and help text live in [src/s2a/cli.py](src/s2a/cli.py).
 
-```bash
-s2a import-xml ./exports/squarespace-wordpress.xml --output-dir ./site-output/example
-```
+## Distribution
 
-Generate an [Astro](https://github.com/withastro/astro) site from a crawl snapshot and optional imported XML:
+This project currently ships in three ways:
 
-```bash
-s2a generate-astro ./site-output/example/site_snapshot.json --output-dir ./generated/site --xml-import ./site-output/example/xml_import.json
-```
+- standalone binary bundles attached to GitHub Releases
+- a Homebrew formula published through `krahd/homebrew-tap`
+- source-based installation from this repository
 
-Run the end-to-end workflow in one command:
+Distribution automation is documented in [RELEASE.md](RELEASE.md) and [DEVELOPMENT.md](DEVELOPMENT.md).
 
-```bash
-s2a migrate https://example.squarespace.com --output-dir ./site-output/example --xml-export ./exports/squarespace-wordpress.xml --astro-dir ./generated/site
-```
+## Contributing
 
-## Output files
-
-`probe` writes:
-
-- `probe.json`
-- `execution-metadata.json`
-
-`crawl` writes:
-
-- `probe.json`
-- `site_snapshot.json`
-- `report.json`
-- `execution-metadata.json`
-- `raw-html/*.html`
-- `raw-json/*.json`
-
-`auth-browser` writes:
-
-- `auth.json`
-- `auth/storage_state.json`
-- `execution-metadata.json`
-
-`import-xml` writes:
-
-- `xml_import.json`
-- `execution-metadata.json`
-
-`generate-astro` writes:
-
-- `astro_generation.json`
-- `execution-metadata.json`
-- `migration-manifest.json`
-- a complete [Astro](https://github.com/withastro/astro) project directory
-
-## Scope notes
-
-This tool is intentionally hybrid. Squarespace's official export is limited, and `?format=json-pretty` is useful but not a supported migration API. The crawler therefore treats rendered HTML as the fallback source of truth and uses structured Squarespace JSON only when available.
-
-The generator converts extracted page bodies to Markdown where possible and falls back to cleaned embedded HTML when conversion quality is weak. That keeps the generated [Astro](https://github.com/withastro/astro) project editable without blocking on perfect HTML-to-Markdown conversion for every Squarespace layout.
-
-Utility routes such as `/cart`, `/checkout`, and `/account` are intentionally skipped during Astro generation because they do not map cleanly to a static site.
+Contribution guidance lives in [CONTRIBUTING.md](CONTRIBUTING.md). Keep changes focused, add or update tests when behavior changes, and update end-user documentation when install or workflow behavior changes.
 
 ## License
 
-This project is licensed under the MIT License. See the `LICENSE` file for details.
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
 ## Disclaimer
 
-This tool is provided "as is", without warranty of any kind. You assume all responsibility for its use, migration outcomes, and any data loss, service disruption, or downstream issues that may result from running it.
+This tool is provided "as is", without warranty of any kind. You assume responsibility for its use, migration outcomes, and any downstream issues that may result from running it.

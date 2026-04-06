@@ -27,6 +27,7 @@ html {
 
 body {
   margin: 0;
+  font-family: var(--sans);
 }
 
 .page-shell {
@@ -96,9 +97,20 @@ main {
   padding: 1.5rem;
 }
 
+.surface > * + * {
+  margin-top: 1rem;
+}
+
 .grid {
   display: grid;
   gap: 1rem;
+}
+
+.grid article {
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.55);
 }
 
 .two-up {
@@ -145,6 +157,15 @@ code {
 ul {
   margin: 0;
   padding-left: 1.15rem;
+}
+
+ol {
+  margin: 0;
+  padding-left: 1.3rem;
+}
+
+li + li {
+  margin-top: 0.4rem;
 }
 
 .links ul {
