@@ -9,6 +9,7 @@
   --accent-strong: #1f4b38;
   --shadow: 0 18px 44px rgba(20, 28, 22, 0.08);
   --radius: 22px;
+  --sans: "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
 }
 
 * {
@@ -21,7 +22,7 @@ html {
     radial-gradient(circle at bottom right, rgba(138, 96, 50, 0.12), transparent 26%),
     linear-gradient(180deg, #f7f8f4 0%, var(--bg) 100%);
   color: var(--ink);
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--sans);
 }
 
 body {
@@ -50,7 +51,7 @@ body {
 .eyebrow {
   margin: 0 0 0.75rem;
   color: var(--accent);
-  font: 700 0.82rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: 700 0.82rem/1.2 var(--sans);
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
@@ -137,7 +138,7 @@ pre {
 }
 
 code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--sans);
   font-size: 0.95em;
 }
 

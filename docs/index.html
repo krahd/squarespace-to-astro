@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>squarespace-to-astro</title>
+    <title>squarespace-to-astro (s2a)</title>
     <meta
       name="description"
       content="Python CLI for migrating Squarespace sites to static-site-friendly content snapshots and Astro projects."
@@ -14,7 +14,7 @@
     <div class="page-shell">
       <header class="hero">
         <p class="eyebrow">Squarespace Migration Tooling</p>
-        <h1>squarespace-to-astro</h1>
+        <h1>squarespace-to-astro (s2a)</h1>
         <p class="lead">
           A Python CLI that probes and crawls Squarespace sites, captures authenticated content,
           imports WordPress XML exports, and generates buildable
@@ -63,7 +63,15 @@
         </section>
 
         <section class="surface">
-          <h2>CLI workflow</h2>
+          <h2>Install and run</h2>
+          <p>
+            Homebrew install is available on macOS arm64 and Linux x86_64:
+          </p>
+          <pre><code>brew tap krahd/tap
+brew install s2a</code></pre>
+          <p>
+            For local development in a repository clone, use the editable install path:
+          </p>
           <pre><code>python -m venv .venv
 source .venv/bin/activate
 pip install -e .[dev]
