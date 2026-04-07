@@ -11,12 +11,12 @@ Use the same pattern for other CLI repos that should publish into the same tap.
 
 ## Formula naming
 
-Use lowercase, kebab-case formula names that match the installed command as closely as practical.
+Use lowercase formula names that match the installed command as closely as practical.
 
 - `krahd/squarespace-to-astro` -> `s2a`
 - `krahd/BatLLM` -> `batllm`
 - `krahd/video_glitcher` -> `video-glitcher`
-- `krahd/Mail-Summariser` -> `mail-summariser`
+- `krahd/mail_summariser` -> `mail_summariser`
 
 ## Release asset naming
 
