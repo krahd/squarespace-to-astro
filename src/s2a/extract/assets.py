@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 import hashlib
@@ -58,6 +57,19 @@ EXTENSION_OVERRIDES = {
     "application/pdf": ".pdf",
 }
 PLACEHOLDER_ASSET_PREFIXES = ("data:", "about:", "javascript:")
+GENERIC_DESCRIPTOR_STEMS = {
+    "asset",
+    "audio",
+    "content",
+    "download",
+    "file",
+    "image",
+    "img",
+    "media",
+    "original",
+    "photo",
+    "video",
+}
 
 ProgressCallback = Callable[[int, int, str | None], None]
 
@@ -72,6 +84,18 @@ class AssetDownloadEstimate:
     @property
     def asset_count(self) -> int:
         return len(self.assets)
+
+
+@dataclass(slots=True)
+class ResolvedAssetDownload:
+    asset: AssetReference
+    final_url: str
+    asset_subdir: str
+    extension: str
+    content_type: str | None
+    size_bytes: int
+    sha256: str
+    content: bytes
 
 
 def extract_asset_references(soup: BeautifulSoup, base_url: str, owner_route: str) -> list[AssetReference]:
@@ -300,8 +324,7 @@ def download_snapshot_assets(
     progress_callback: ProgressCallback | None = None,
 ) -> AssetManifest:
     warnings: list[str] = []
-    items: list[DownloadedAsset] = []
-    page_group_indices: dict[str, dict[str, int]] = defaultdict(dict)
+    resolved_assets: list[ResolvedAssetDownload] = []
     assets = estimate.assets if estimate is not None else collect_unique_squarespace_assets(
         snapshot)
     total_assets = len(assets)
@@ -310,49 +333,80 @@ def download_snapshot_assets(
         progress_callback(0, total_assets, None)
 
     for index, asset in enumerate(assets, start=1):
-        sequence = page_group_sequence(page_group_indices, asset.owner_route, asset.group_key)
-
         try:
             response = client.get(asset.source_url)
             response.raise_for_status()
         except httpx.HTTPError as exc:
             warnings.append(f"Failed to download asset {asset.source_url}: {exc}")
         else:
+            content = response.content
             content_type = response.headers.get("content-type")
             extension = extension_for_asset(str(response.url), content_type)
-            filename = build_download_filename(asset, sequence, extension)
             asset_subdir = asset_subdirectory(asset.asset_type)
-            local_relative_path = Path("downloaded-assets") / asset_subdir / filename
-            public_relative_path = Path("assets") / asset_subdir / filename
-            full_path = output_dir / local_relative_path
-            full_path.parent.mkdir(parents=True, exist_ok=True)
-            full_path.write_bytes(response.content)
-
-            item = DownloadedAsset(
-                source_url=asset.source_url,
-                final_url=str(response.url),
-                asset_type=asset.asset_type,
-                owner_route=asset.owner_route,
-                group_key=asset.group_key,
-                filename=filename,
-                local_path=local_relative_path.as_posix(),
-                public_path=f"/{public_relative_path.as_posix()}",
-                content_type=content_type,
-                size_bytes=len(response.content),
-                sha256=hashlib.sha256(response.content).hexdigest(),
-                alt_text=asset.alt_text,
-                caption=asset.caption,
-                link_text=asset.link_text,
-                variant_hint=asset.variant_hint,
+            resolved_assets.append(
+                ResolvedAssetDownload(
+                    asset=asset,
+                    final_url=str(response.url),
+                    asset_subdir=asset_subdir,
+                    extension=extension,
+                    content_type=content_type,
+                    size_bytes=len(content),
+                    sha256=hashlib.sha256(content).hexdigest(),
+                    content=content,
+                )
             )
-            items.append(item)
 
         if progress_callback is not None:
             progress_callback(index, total_assets, None)
 
+    items: list[DownloadedAsset] = []
+    for group in group_downloaded_assets(resolved_assets):
+        representative = min(group, key=canonical_asset_sort_key)
+        canonical_id = representative.sha256
+        filename = build_download_filename(
+            representative.asset,
+            representative.extension,
+            canonical_id[:12],
+        )
+        local_relative_path = Path("downloaded-assets") / representative.asset_subdir / filename
+        public_relative_path = Path("assets") / representative.asset_subdir / filename
+        full_path = output_dir / local_relative_path
+        full_path.parent.mkdir(parents=True, exist_ok=True)
+        full_path.write_bytes(representative.content)
+
+        source_urls = sorted({entry.asset.source_url for entry in group})
+        final_urls = sorted({entry.final_url for entry in group})
+        item = DownloadedAsset(
+            source_url=representative.asset.source_url,
+            final_url=representative.final_url,
+            asset_type=representative.asset.asset_type,
+            owner_route=representative.asset.owner_route,
+            group_key=representative.asset.group_key,
+            filename=filename,
+            local_path=local_relative_path.as_posix(),
+            public_path=f"/{public_relative_path.as_posix()}",
+            content_type=representative.content_type,
+            size_bytes=representative.size_bytes,
+            sha256=representative.sha256,
+            canonical_id=canonical_id,
+            alt_text=representative.asset.alt_text,
+            caption=representative.asset.caption,
+            link_text=representative.asset.link_text,
+            variant_hint=representative.asset.variant_hint,
+            alias_source_urls=[url for url in source_urls if url !=
+                               representative.asset.source_url],
+            alias_final_urls=[url for url in final_urls if url != representative.final_url],
+            deduplicated_from_count=len(group),
+        )
+        items.append(item)
+
+    items.sort(key=lambda item: (item.public_path, item.source_url))
+
     return AssetManifest(
         generated_at=datetime.now(UTC).isoformat(),
         items=items,
+        source_asset_count=len(resolved_assets),
+        deduplicated_asset_count=max(0, len(resolved_assets) - len(items)),
         warnings=warnings,
     )
 
@@ -546,26 +600,83 @@ def is_squarespace_asset_url(url: str) -> bool:
     return any(marker in host for marker in SQUARESPACE_HOST_MARKERS)
 
 
-def page_group_sequence(page_group_indices: dict[str, dict[str, int]], owner_route: str, group_key: str) -> int:
-    page_key = owner_route or "/"
-    group_map = page_group_indices[page_key]
-    if group_key not in group_map:
-        group_map[group_key] = len(group_map) + 1
-    return group_map[group_key]
+def group_downloaded_assets(
+    resolved_assets: list[ResolvedAssetDownload],
+) -> list[list[ResolvedAssetDownload]]:
+    groups: dict[tuple[str, str], list[ResolvedAssetDownload]] = {}
+
+    for resolved in resolved_assets:
+        key = (resolved.asset_subdir, resolved.sha256)
+        groups.setdefault(key, []).append(resolved)
+
+    return list(groups.values())
 
 
-def build_download_filename(asset: AssetReference, sequence: int, extension: str) -> str:
-    page_slug = slugify_fragment(asset.owner_route.strip("/") or "home")
-    variant = slugify_fragment(asset.variant_hint or "original")
+def canonical_asset_sort_key(resolved: ResolvedAssetDownload) -> tuple[bool, str, str, str, str, str, str]:
+    descriptor = asset_descriptor_stem(resolved.asset)
+    variant = canonical_variant_hint(resolved.asset)
+    route = slugify_fragment(resolved.asset.owner_route.strip("/") or "home")
+    url_identity = resolved.final_url or resolved.asset.source_url
+    return (
+        descriptor in GENERIC_DESCRIPTOR_STEMS,
+        descriptor,
+        variant,
+        route,
+        url_identity,
+        resolved.asset.attribute,
+        resolved.asset.group_key,
+    )
+
+
+def build_download_filename(asset: AssetReference, extension: str, canonical_suffix: str) -> str:
+    stem = asset_descriptor_stem(asset)
+    variant = canonical_variant_hint(asset)
+
+    if asset.asset_type != "file" and variant not in {"", "file", "original"}:
+        if stem != variant and not stem.endswith(f"-{variant}"):
+            stem = f"{stem}-{variant}"
+
+    return f"{stem}-{canonical_suffix}{extension}"
+
+
+def canonical_variant_hint(asset: AssetReference) -> str:
+    return slugify_fragment(asset.variant_hint or "original")
+
+
+def asset_descriptor_stem(asset: AssetReference) -> str:
+    candidates: list[str | None]
 
     if asset.asset_type == "file":
-        descriptor = slugify_fragment(
-            asset.link_text or filename_stem_from_url(asset.source_url) or "file")
-        stem = f"{page_slug}-file-{sequence}-{descriptor}"
+        candidates = [
+            asset.link_text,
+            filename_stem_from_url(asset.source_url),
+            asset.owner_route.strip("/") or "file",
+        ]
     else:
-        stem = f"{page_slug}-{sequence}-{variant}"
+        candidates = [
+            filename_stem_from_url(asset.source_url),
+            asset.alt_text,
+            asset.caption,
+            asset.link_text,
+            asset.owner_route.strip("/") or asset.asset_type,
+        ]
 
-    return f"{stem}{extension}"
+    normalized: list[str] = []
+    for candidate in candidates:
+        if not candidate:
+            continue
+        slug = slugify_fragment(candidate)
+        if slug and slug not in normalized:
+            normalized.append(slug)
+
+    for slug in normalized:
+        if slug not in GENERIC_DESCRIPTOR_STEMS:
+            return slug
+
+    if normalized:
+        return normalized[0]
+
+    return slugify_fragment(asset.asset_type or "asset")
 
 
 def extension_for_asset(url: str, content_type: str | None) -> str:

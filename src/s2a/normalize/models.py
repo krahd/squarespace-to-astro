@@ -41,10 +41,14 @@ class DownloadedAsset:
     content_type: str | None = None
     size_bytes: int | None = None
     sha256: str | None = None
+    canonical_id: str | None = None
     alt_text: str | None = None
     caption: str | None = None
     link_text: str | None = None
     variant_hint: str | None = None
+    alias_source_urls: list[str] = field(default_factory=list)
+    alias_final_urls: list[str] = field(default_factory=list)
+    deduplicated_from_count: int = 1
     warnings: list[str] = field(default_factory=list)
 
 
@@ -52,6 +56,8 @@ class DownloadedAsset:
 class AssetManifest:
     generated_at: str
     items: list[DownloadedAsset] = field(default_factory=list)
+    source_asset_count: int = 0
+    deduplicated_asset_count: int = 0
     warnings: list[str] = field(default_factory=list)
 
 
@@ -194,6 +200,7 @@ class GeneratedContentEntry:
     canonical_url: str | None
     body: str
     body_format: str
+    presentation: str = "standard"
     home: bool = False
     published_at: str | None = None
     categories: list[str] = field(default_factory=list)
@@ -208,6 +215,18 @@ class AstroManifest:
     base_url: str | None
     blog_base_path: str
     blog_title: str
+    fidelity_mode: str
+    layout_strategy: str
+    markdown_first: bool
+    navigation_source: str
+    header_style: str
+    background_style: str
+    header_width: str
+    header_layout: str
+    header_alignment: str
+    page_width: str | None
+    page_padding: str | None
+    header_padding: str | None
     navigation: list[GeneratedNavigationItem] = field(default_factory=list)
     pages: list[GeneratedContentEntry] = field(default_factory=list)
     posts: list[GeneratedContentEntry] = field(default_factory=list)

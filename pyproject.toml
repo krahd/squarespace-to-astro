@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "squarespace-to-astro"
-version = "0.3.0"
+version = "0.4.0"
 description = "Probe and crawl Squarespace sites into a static-site migration snapshot."
 readme = "README.md"
 license = "MIT"

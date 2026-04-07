@@ -3,7 +3,7 @@ from pathlib import Path
 
 import s2a.cli as cli
 from s2a.extract.assets import AssetDownloadEstimate
-from s2a.normalize.models import AssetManifest, AssetReference, AuthCaptureReport, CrawlReport, CrawlSnapshot, SiteProbe
+from s2a.normalize.models import AstroGenerationResult, AssetManifest, AssetReference, AuthCaptureReport, CrawlReport, CrawlSnapshot, SiteProbe
 
 
 def make_auth_namespace(
@@ -290,6 +290,83 @@ def test_build_parser_accepts_yes_and_quiet_flags_for_all_commands() -> None:
         assert args.quiet is True
 
 
+def test_build_parser_accepts_fidelity_flags_for_generate_astro_and_migrate() -> None:
+    parser = cli.build_parser()
+
+    generate_args = parser.parse_args([
+        "generate-astro",
+        "site_snapshot.json",
+        "--fidelity-mode",
+        "balanced",
+        "--layout-strategy",
+        "components",
+        "--markdown",
+    ])
+    migrate_args = parser.parse_args([
+        "migrate",
+        "https://example.com",
+        "--choose-layout-strategy",
+    ])
+
+    assert generate_args.fidelity_mode == "balanced"
+    assert generate_args.layout_strategy == "components"
+    assert generate_args.markdown_first is True
+    assert migrate_args.choose_layout_strategy is True
+
+
+def test_resolve_generation_options_prompts_for_layout_strategy(monkeypatch) -> None:
+    console = cli.Console(quiet=False)
+    args = argparse.Namespace(
+        fidelity_mode="high",
+        layout_strategy=None,
+        choose_layout_strategy=True,
+        yes=False,
+    )
+    monkeypatch.setattr("builtins.input", lambda prompt: "2")
+
+    fidelity_mode, layout_strategy, markdown_first = cli.resolve_generation_options(console, args)
+
+    assert fidelity_mode == "high"
+    assert layout_strategy == "components"
+    assert markdown_first is False
+
+
+def test_generate_astro_main_passes_fidelity_settings_to_generator(monkeypatch, tmp_path) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_generate_astro_project(*, snapshot_path, output_dir, **kwargs):
+        captured["snapshot_path"] = snapshot_path
+        captured["output_dir"] = output_dir
+        captured.update(kwargs)
+        return AstroGenerationResult(
+            generated_at="2026-04-05T00:00:00+00:00",
+            output_dir=str(output_dir),
+            manifest_path="migration-manifest.json",
+            pages_written=1,
+            posts_written=0,
+            warnings=[],
+        )
+
+    monkeypatch.setattr(cli, "generate_astro_project", fake_generate_astro_project)
+
+    result = cli.main([
+        "generate-astro",
+        "site_snapshot.json",
+        "--output-dir",
+        str(tmp_path),
+        "--fidelity-mode",
+        "balanced",
+        "--layout-strategy",
+        "components",
+        "--markdown",
+    ])
+
+    assert result == 0
+    assert captured["fidelity_mode"] == "balanced"
+    assert captured["layout_strategy"] == "components"
+    assert captured["markdown_first"] is True
+
+
 def test_crawl_main_skips_confirmation_prompt_with_yes(monkeypatch, tmp_path) -> None:
     calls = {"download": 0}
 
@@ -366,7 +443,7 @@ def test_migrate_main_can_skip_asset_download_and_exit_zero(monkeypatch, tmp_pat
         calls["download"] += 1
         return AssetManifest(generated_at="2026-04-05T00:00:00+00:00")
 
-    def fake_generate_astro_project(*args, **kwargs):
+    def fake_generate_astro_project(*_args, **_kwargs):
         calls["astro"] += 1
         raise AssertionError("generate_astro_project should not be called")
 

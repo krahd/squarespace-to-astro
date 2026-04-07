@@ -15,15 +15,47 @@ from s2a.extract.auth import apply_storage_state_cookies, capture_storage_state
 from s2a.extract.crawl import crawl_site
 from s2a.extract.xml_import import import_wordpress_xml
 from s2a.files import write_json
-from s2a.generate.astro import generate_astro_project
+from s2a.generate.astro import generate_astro_project as _generate_astro_project
 from s2a.net import build_client
-from s2a.normalize.models import AssetManifest
+from s2a.normalize.models import AssetManifest, AstroGenerationResult
 from s2a.normalize.transform import build_report
 from s2a.probe import probe_site
 
 
 EXECUTION_METADATA_FILE = "execution-metadata.json"
 SENSITIVE_ARGUMENTS = {"password", "site_password"}
+FIDELITY_MODES = ("high", "balanced", "minimal")
+LAYOUT_STRATEGIES = ("hybrid", "components")
+DEFAULT_LAYOUT_STRATEGY_BY_MODE = {
+    "high": "hybrid",
+    "balanced": "hybrid",
+    "minimal": "hybrid",
+}
+
+
+def generate_astro_project(
+    snapshot_path: Path,
+    output_dir: Path,
+    xml_import_path: Path | None = None,
+    site_url: str | None = None,
+    base_path: str | None = None,
+    project_name: str | None = None,
+    fidelity_mode: str = "high",
+    layout_strategy: str = "hybrid",
+    markdown_first: bool = False,
+) -> AstroGenerationResult:
+    kwargs: dict[str, Any] = {
+        "snapshot_path": snapshot_path,
+        "output_dir": output_dir,
+        "xml_import_path": xml_import_path,
+        "site_url": site_url,
+        "base_path": base_path,
+        "project_name": project_name,
+        "fidelity_mode": fidelity_mode,
+        "layout_strategy": layout_strategy,
+        "markdown_first": markdown_first,
+    }
+    return _generate_astro_project(**kwargs)
 
 
 @dataclass(slots=True)
@@ -180,6 +212,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--project-name",
         help="Optional package name for the generated Astro project.",
     )
+    add_fidelity_arguments(astro_parser)
 
     migrate_parser = subparsers.add_parser(
         "migrate",
@@ -220,6 +253,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--project-name",
         help="Optional package name for the generated Astro project.",
     )
+    add_fidelity_arguments(migrate_parser)
 
     return parser
 
@@ -292,10 +326,82 @@ def add_interaction_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def add_fidelity_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--fidelity-mode",
+        choices=FIDELITY_MODES,
+        default="high",
+        help="How aggressively the generator should preserve Squarespace layout structure. Defaults to high.",
+    )
+    parser.add_argument(
+        "--layout-strategy",
+        choices=LAYOUT_STRATEGIES,
+        help="How to handle layout-heavy pages such as gallery and portfolio grids.",
+    )
+    parser.add_argument(
+        "--choose-layout-strategy",
+        action="store_true",
+        help="Prompt for the layout strategy at runtime instead of silently using the default.",
+    )
+    parser.add_argument(
+        "-md",
+        "--markdown",
+        dest="markdown_first",
+        action="store_true",
+        help="Prefer Markdown output when the conversion is acceptable, only keeping HTML for layout-heavy content.",
+    )
+
+
 def resolve_auth_credentials(args: argparse.Namespace) -> tuple[str | None, str | None]:
     username = getattr(args, "username", None) or os.environ.get("SQUARESPACE_USER")
     password = getattr(args, "password", None) or os.environ.get("SQUARESPACE_PWD")
     return username, password
+
+
+def default_layout_strategy_for_mode(fidelity_mode: str) -> str:
+    return DEFAULT_LAYOUT_STRATEGY_BY_MODE.get(fidelity_mode, "hybrid")
+
+
+def prompt_layout_strategy(console: Console, default: str) -> str:
+    console.finish_progress()
+    default_choice = "1" if default == "hybrid" else "2"
+    console.emit("Choose layout strategy for layout-heavy pages:", always=True)
+    console.emit("  1. hybrid     Preserve Squarespace HTML and style it in Astro.", always=True)
+    console.emit(
+        "  2. components Rebuild known gallery/grid patterns into Astro-friendly markup.", always=True)
+
+    while True:
+        response = input(f"Layout strategy [{default_choice}]: ").strip().lower()
+        if not response:
+            return default
+        if response in {"1", "hybrid"}:
+            return "hybrid"
+        if response in {"2", "components"}:
+            return "components"
+        print("Please choose 1/hybrid or 2/components.")
+
+
+def resolve_generation_options(console: Console, args: argparse.Namespace) -> tuple[str, str, bool]:
+    fidelity_mode = getattr(args, "fidelity_mode", "high")
+    layout_strategy = getattr(args, "layout_strategy", None)
+    choose_layout_strategy = getattr(args, "choose_layout_strategy", False)
+    markdown_first = getattr(args, "markdown_first", False)
+
+    if layout_strategy:
+        return fidelity_mode, layout_strategy, markdown_first
+
+    default_layout_strategy = default_layout_strategy_for_mode(fidelity_mode)
+
+    if not choose_layout_strategy:
+        return fidelity_mode, default_layout_strategy, markdown_first
+
+    if getattr(args, "yes", False):
+        console.emit(
+            f"Layout strategy defaulted to {default_layout_strategy} because --yes skips interactive selection."
+        )
+        return fidelity_mode, default_layout_strategy, markdown_first
+
+    return fidelity_mode, prompt_layout_strategy(console, default_layout_strategy), markdown_first
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -319,6 +425,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "generate-astro":
         output_dir.mkdir(parents=True, exist_ok=True)
+        fidelity_mode, layout_strategy, markdown_first = resolve_generation_options(console, args)
+        args.fidelity_mode = fidelity_mode
+        args.layout_strategy = layout_strategy
+        args.markdown_first = markdown_first
         xml_input_path = resolve_xml_input(
             xml_import_path=args.xml_import,
             xml_export_path=args.xml_export,
@@ -331,6 +441,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             site_url=args.site,
             base_path=args.base,
             project_name=args.project_name,
+            fidelity_mode=fidelity_mode,
+            layout_strategy=layout_strategy,
+            markdown_first=markdown_first,
         )
         write_json(output_dir / "astro_generation.json", result)
         write_execution_metadata(
@@ -467,6 +580,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
             astro_dir = Path(args.astro_dir) if args.astro_dir else output_dir / "astro-site"
             astro_dir.mkdir(parents=True, exist_ok=True)
+            fidelity_mode, layout_strategy, markdown_first = resolve_generation_options(
+                console, args)
+            args.fidelity_mode = fidelity_mode
+            args.layout_strategy = layout_strategy
+            args.markdown_first = markdown_first
             astro_result = generate_astro_project(
                 snapshot_path=output_dir / "site_snapshot.json",
                 output_dir=astro_dir,
@@ -474,6 +592,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 site_url=args.site,
                 base_path=args.base,
                 project_name=args.project_name,
+                fidelity_mode=fidelity_mode,
+                layout_strategy=layout_strategy,
+                markdown_first=markdown_first,
             )
             write_json(output_dir / "astro_generation.json", astro_result)
             write_execution_metadata(

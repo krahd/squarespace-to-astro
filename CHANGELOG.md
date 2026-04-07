@@ -6,6 +6,19 @@ The format is based on Keep a Changelog, and this project uses semantic versioni
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-04-07
+
+### Added in 0.4.0
+
+- deterministic localized asset filenames with content-hash deduplication and alias tracking in `asset_manifest.json`
+- generation controls for `--fidelity-mode`, `--layout-strategy`, `--choose-layout-strategy`, and `-md` / `--markdown`
+- homepage-derived navigation and chrome hints plus component reconstruction for portfolio grids and Fluid Engine sections
+
+### Changed in 0.4.0
+
+- layout-heavy pages now stay in HTML with immersive presentation when fidelity needs to win over Markdown conversion
+- generated Astro projects now omit the posts collection when a migration has no posts and rewrite duplicate Squarespace asset URLs to one shared localized file
+
 ## [0.3.0] - 2026-04-05
 
 ### Added in 0.3.0

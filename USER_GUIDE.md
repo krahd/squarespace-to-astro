@@ -39,7 +39,7 @@ If you need to run s2a from source instead of using Homebrew or the standalone b
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install "git+https://github.com/krahd/squarespace-to-astro.git@v0.3.0"
+pip install "git+https://github.com/krahd/squarespace-to-astro.git@v0.4.0"
 python -m playwright install chromium
 ```
 
@@ -132,8 +132,10 @@ The other files depend on the command you run.
 - `probe.json`
 - `site_snapshot.json`
 - `asset_manifest.json`
+  Records canonical localized asset paths, plus any alias Squarespace URLs that were merged into the same downloaded file.
 - `report.json`
 - `downloaded-assets/`
+  Stores localized files under deterministic family directories (`images/`, `videos/`, `audio/`, and `files/`). When two Squarespace asset URLs resolve to identical content, the crawler keeps one canonical file and reuses that path everywhere.
 - `raw-html/`
 - `raw-json/`
 
@@ -180,6 +182,23 @@ s2a generate-astro ./site-output/example/site_snapshot.json \
   --xml-import ./site-output/example/xml_import.json
 ```
 
+Generate a higher-fidelity Astro site while keeping Markdown where the conversion stays clean:
+
+```bash
+s2a generate-astro ./site-output/example/site_snapshot.json \
+  --output-dir ./generated/example-site \
+  --fidelity-mode high \
+  --layout-strategy hybrid \
+  --markdown
+```
+
+Generation controls:
+
+- `--fidelity-mode high|balanced|minimal`: controls how aggressively the generator preserves Squarespace layout structure. `high` is the default.
+- `--layout-strategy hybrid|components`: chooses how layout-heavy pages are handled. `hybrid` preserves more original Squarespace HTML and embedded layout styling; `components` rebuilds known gallery and Fluid Engine patterns into Astro-friendly markup.
+- `--choose-layout-strategy`: prompts at runtime instead of silently using the default strategy.
+- `-md`, `--markdown`: prefers Markdown output when the conversion is clean, but still keeps HTML for layout-heavy content such as galleries, embeds, and Fluid Engine sections.
+
 ## Edit the generated Astro site
 
 The generated site is a normal [Astro](https://github.com/withastro/astro) project.
@@ -192,8 +211,8 @@ npm run dev
 
 Most hand edits happen in these locations:
 
-- `src/content/pages/`: generated page content in Markdown
-- `src/content/posts/`: generated post content in Markdown
+- `src/content/pages/`: generated page content, usually Markdown with HTML preserved where layout fidelity needs it
+- `src/content/posts/`: generated post content, usually Markdown with HTML preserved where layout fidelity needs it
 - `src/data/site.json`: site title, description, base URL, and navigation
 - `src/layouts/`: shared layouts
 - `src/pages/`: route files
