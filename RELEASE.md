@@ -72,6 +72,19 @@ It:
 - pushes the updated formula into `krahd/homebrew-tap`
 
 The workflow requires the repository secret `HOMEBREW_TAP_TOKEN` so it can push to the separate tap repository.
+Each repository that publishes into the shared tap must define its own `HOMEBREW_TAP_TOKEN` Actions secret, even when the repositories live under the same personal GitHub account.
+The tap push step rebases onto `main` and retries pushes so different repos can update separate formula files in `krahd/homebrew-tap` without manual intervention.
+
+Shared tap rollout guidance for additional projects lives in [HOMEBREW_TAP.md](HOMEBREW_TAP.md).
+
+## Shared tap conventions
+
+If additional repositories publish formulas into `krahd/homebrew-tap`:
+
+- keep formula names lowercase and kebab-case
+- keep binary archive prefixes aligned with the installed CLI name
+- update only one formula file per publishing repo
+- keep Homebrew asset names stable across releases so checksum resolution stays mechanical
 
 ## Post-release verification
 

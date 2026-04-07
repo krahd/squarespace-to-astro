@@ -1,3 +1,38 @@
+# Shared Homebrew Tap
+
+This repo publishes `s2a` into the shared Homebrew tap `krahd/homebrew-tap`.
+Use the same pattern for other CLI repos that should publish into the same tap.
+
+## Secret model
+
+- Local shell use: `HOMEBREW_TAP_TOKEN` can come from your shell environment.
+- GitHub Actions use: each repository still needs its own `HOMEBREW_TAP_TOKEN` repository secret.
+- Personal GitHub accounts do not provide a personal-account-wide Actions secret scope.
+
+## Formula naming
+
+Use lowercase, kebab-case formula names that match the installed command as closely as practical.
+
+- `krahd/squarespace-to-astro` -> `s2a`
+- `krahd/BatLLM` -> `batllm`
+- `krahd/video_glitcher` -> `video-glitcher`
+- `krahd/Mail-Summariser` -> `mail-summariser`
+
+## Release asset naming
+
+Keep binary asset names stable and machine-readable.
+
+- macOS arm64: `<app-name>-<version>-macos-arm64.tar.gz`
+- Linux x86_64: `<app-name>-<version>-linux-x86_64.tar.gz`
+- Windows x86_64: `<app-name>-<version>-windows-x86_64.zip`
+
+For Homebrew publishing, the formula renderer only needs the platform-specific asset URLs and SHA256 digests that Homebrew supports.
+
+## Workflow template
+
+Each publishing repo should have a workflow equivalent to this shape:
+
+```yaml
 name: Publish Homebrew Tap
 
 on:
@@ -25,6 +60,8 @@ jobs:
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.workflow_run.head_branch }}
       TAP_REPO: krahd/homebrew-tap
+      APP_NAME: your-cli-name
+      FORMULA_NAME: your-formula-name
     steps:
       - name: Check out source repo
         uses: actions/checkout@v4
@@ -41,14 +78,8 @@ jobs:
           version="${RELEASE_TAG#v}"
           max_attempts=24
           sleep_seconds=5
-
-          if [[ -z "$version" || "$version" == "$RELEASE_TAG" ]]; then
-            echo "Could not derive a release version from tag ${RELEASE_TAG}." >&2
-            exit 1
-          fi
-
-          macos_name="s2a-${version}-macos-arm64.tar.gz"
-          linux_name="s2a-${version}-linux-x86_64.tar.gz"
+          macos_name="${APP_NAME}-${version}-macos-arm64.tar.gz"
+          linux_name="${APP_NAME}-${version}-linux-x86_64.tar.gz"
 
           for attempt in $(seq 1 "$max_attempts"); do
             release_json=$(gh release view "$RELEASE_TAG" --json assets)
@@ -92,23 +123,24 @@ jobs:
             --version "$VERSION" \
             --macos-arm64-sha256 "$MACOS_ARM64_SHA256" \
             --linux-x86-64-sha256 "$LINUX_X86_64_SHA256" \
-            --output tap-repo/Formula/s2a.rb
+            --output "tap-repo/Formula/${FORMULA_NAME}.rb"
 
       - name: Commit and push tap update
         working-directory: tap-repo
         env:
           RELEASE_TAG: ${{ env.RELEASE_TAG }}
+          FORMULA_NAME: ${{ env.FORMULA_NAME }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          if git diff --quiet -- Formula/s2a.rb; then
+          if git diff --quiet -- "Formula/${FORMULA_NAME}.rb"; then
             echo "Formula already up to date."
             exit 0
           fi
 
-          git add Formula/s2a.rb
-          git commit -m "Update s2a formula for ${RELEASE_TAG}"
+          git add "Formula/${FORMULA_NAME}.rb"
+          git commit -m "Update ${FORMULA_NAME} formula for ${RELEASE_TAG}"
 
           max_attempts=5
           for attempt in $(seq 1 "$max_attempts"); do
@@ -130,3 +162,23 @@ jobs:
 
           echo "Unable to push tap update after ${max_attempts} attempts." >&2
           exit 1
+```
+
+## Renderer expectations
+
+Each repo should keep its own `scripts/render_homebrew_formula.py` tailored to its package name, homepage, description, supported platforms, and archive URLs.
+
+Keep the renderer responsible for:
+
+- the formula class name
+- the GitHub release URL pattern
+- the supported platform matrix
+- the wrapper script that launches the unpacked bundle
+
+Keep the workflow responsible for:
+
+- resolving the release tag
+- reading release asset digests from GitHub Releases
+- cloning `krahd/homebrew-tap`
+- writing exactly one formula file
+- rebasing and retrying pushes
