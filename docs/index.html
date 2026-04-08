@@ -22,9 +22,10 @@
           understand what the generated output looks like.
         </p>
         <p>
-          <strong>Current release:</strong> v0.5.0. Recent updates add higher-fidelity generation
-          controls, route-based localized asset names, and automatic upgrades for older snapshots
-          that still use hash-suffixed asset filenames.
+          <strong>Current release:</strong> v0.5.1. Recent updates add classic-editor component
+          reconstruction in <code>--layout-strategy components</code>, alongside higher-fidelity
+          generation controls, route-based localized asset names, and automatic upgrades for older
+          snapshots that still use hash-suffixed asset filenames.
         </p>
         <div class="actions">
           <a href="https://github.com/krahd/squarespace-to-astro/blob/main/USER_GUIDE.md">Detailed User Guide</a>
@@ -114,8 +115,11 @@ brew install s2a</code></pre>
           </p>
           <p>
             For layout-heavy sites, the current release also supports
-            <code>--fidelity-mode high --layout-strategy hybrid</code>. Add
-            <code>--markdown</code> if you want Markdown when the conversion stays clean.
+            <code>--fidelity-mode high</code> with either
+            <code>--layout-strategy hybrid</code> or
+            <code>--layout-strategy components</code>. The components strategy rebuilds supported
+            portfolio, gallery, Fluid Engine, and classic-editor layouts into cleaner Astro-friendly
+            markup. Add <code>--markdown</code> if you want Markdown when the conversion stays clean.
           </p>
         </section>
 

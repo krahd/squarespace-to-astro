@@ -805,6 +805,98 @@ def test_generate_astro_project_components_strategy_rebuilds_fluid_engine_page(t
     assert "data-fluid-engine-section" not in content
 
 
+def test_generate_astro_project_components_strategy_rebuilds_classic_editor_layout(tmp_path: Path) -> None:
+    snapshot_dir = tmp_path / "snapshot"
+    raw_html_dir = snapshot_dir / "raw-html"
+    raw_html_dir.mkdir(parents=True)
+
+    write_text(
+        raw_html_dir / "index.html",
+        "<html><body><main><h1>Home</h1><p>Welcome.</p></main></body></html>",
+    )
+    write_text(
+        raw_html_dir / "barcelona.html",
+        """
+        <html><body><main><article class="sections"><section class="page-section" data-sqsp-section="classic-editor">
+            <div class="content-wrapper"><div class="content"><div class="sqs-layout sqs-grid-12 columns-12">
+                <div class="row sqs-row">
+                    <div class="col sqs-col-6 span-6"><div class="sqs-block image-block" id="block-image"><div class="sqs-block-content"><figure class="sqs-block-image-figure"><img src="/assets/images/barcelona-1.webp" alt="Barcelona" onload="this.classList.add('loaded')" /><figcaption class="image-caption"><p><strong>Credits</strong></p><p>Barcelona team.</p></figcaption></figure></div></div></div>
+                    <div class="col sqs-col-6 span-6"><div class="sqs-block website-component-block html-block" id="block-text"><div class="sqs-block-content"><div class="sqs-html-content"><p><!--[if gte mso 9]><xml><w:WordDocument></w:WordDocument></xml><![endif]--></p><style>.junk{display:none;}</style><h2>Barcelona</h2><p>Classic editor copy.</p></div></div></div></div>
+                </div>
+                <div class="row sqs-row">
+                    <div class="col sqs-col-12 span-12"><div class="sqs-block gallery-block" id="block-gallery"><div class="sqs-block-content"><div class="sqs-gallery-container sqs-gallery-block-grid"><div class="sqs-gallery"><div class="slide" data-type="image"><div class="margin-wrapper"><a class="image-slide-anchor content-fill" role="presentation"><img src="/assets/images/barcelona-2.webp" alt="A" /></a></div></div><div class="slide" data-type="image"><div class="margin-wrapper"><a class="image-slide-anchor content-fill" role="presentation"><img src="/assets/images/barcelona-3.webp" alt="B" /></a></div></div><div class="slide" data-type="image"><div class="margin-wrapper"><a class="image-slide-anchor content-fill" role="presentation"><img src="/assets/images/barcelona-4.webp" alt="C" /></a></div></div></div></div></div></div></div>
+                </div>
+                <div class="row sqs-row">
+                    <div class="col sqs-col-12 span-12"><div class="sqs-block video-block" data-block-json='{"html":"&lt;iframe src=\"//www.youtube.com/embed/NYN-VMW-9T8\" allowfullscreen&gt;&lt;/iframe&gt;","url":"https://www.youtube.com/watch?v=NYN-VMW-9T8","providerName":"YouTube","description":{"html":"<p>Barcelona video description.</p>"}}' id="block-video"><div class="sqs-block-content"><div class="sqs-video-wrapper" data-html='&lt;iframe src="//www.youtube.com/embed/NYN-VMW-9T8" allowfullscreen&gt;&lt;/iframe&gt;'></div></div></div></div>
+                </div>
+            </div></div></div>
+        </section></article></main></body></html>
+        """,
+    )
+
+    probe = SiteProbe(
+        target_url="https://example.com/",
+        final_home_url="https://example.com/",
+        site_origin="https://example.com",
+        homepage_status_code=200,
+        homepage_title="Example Site",
+        probably_squarespace=True,
+        homepage_links=["https://example.com/", "https://example.com/projects/barcelona"],
+    )
+    snapshot = CrawlSnapshot(
+        generated_at="2026-04-05T00:00:00+00:00",
+        target_url="https://example.com/",
+        base_url="https://example.com/",
+        probe=probe,
+        pages=[
+            PageSnapshot(
+                requested_url="https://example.com/",
+                final_url="https://example.com/",
+                status_code=200,
+                content_type="text/html",
+                title="Home — Example Site",
+                meta_description="Home description",
+                canonical_url="https://example.com/",
+                raw_html_path="raw-html/index.html",
+            ),
+            PageSnapshot(
+                requested_url="https://example.com/projects/barcelona",
+                final_url="https://example.com/projects/barcelona",
+                status_code=200,
+                content_type="text/html",
+                title="Barcelona — Example Site",
+                meta_description="Barcelona description",
+                canonical_url="https://example.com/projects/barcelona",
+                raw_html_path="raw-html/barcelona.html",
+            ),
+        ],
+    )
+
+    snapshot_path = snapshot_dir / "site_snapshot.json"
+    write_json(snapshot_path, snapshot)
+
+    output_dir = tmp_path / "astro-site"
+    generate_astro_project(
+        snapshot_path,
+        output_dir,
+        site_url="https://example.com",
+        layout_strategy="components",
+    )
+    content = (output_dir / "src/content/pages/projects--barcelona.md").read_text(encoding="utf-8")
+
+    assert "bodyFormat: html" in content
+    assert "presentation: immersive" in content
+    assert "s2a-classic-layout" in content
+    assert "s2a-classic-block--image" in content
+    assert "s2a-classic-block--text" in content
+    assert "s2a-classic-block--embed" in content
+    assert "s2a-gallery-grid" in content
+    assert "sqs-layout" not in content
+    assert "website-component-block" not in content
+    assert "<!--[if gte mso 9]" not in content
+    assert "https://www.youtube.com/embed/NYN-VMW-9T8" in content
+
+
 def test_generate_astro_project_skips_utility_routes(tmp_path: Path) -> None:
     snapshot_dir = tmp_path / "snapshot"
     raw_html_dir = snapshot_dir / "raw-html"

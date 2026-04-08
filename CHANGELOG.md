@@ -6,6 +6,17 @@ The format is based on Keep a Changelog, and this project uses semantic versioni
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-04-08
+
+### Fixed in 0.5.1
+
+- `components` generation now rebuilds classic-editor Squarespace layouts into structured `s2a-classic-*` markup instead of falling back to raw `sqs-layout` HTML on pages such as Tomas Laurenzo's project pages
+- classic-editor gallery blocks now match the real Squarespace `.sqs-gallery-block-grid` pattern so they can be rebuilt into `s2a-gallery-*` markup during componentized generation
+
+### Changed in 0.5.1
+
+- documentation and website copy now describe `components` mode as covering portfolio grids, gallery blocks, Fluid Engine sections, and classic-editor layouts
+
 ## [0.5.0] - 2026-04-07
 
 ### Added in 0.5.0

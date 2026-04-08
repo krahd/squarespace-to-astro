@@ -39,7 +39,7 @@ If you need to run s2a from source instead of using Homebrew or the standalone b
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install "git+https://github.com/krahd/squarespace-to-astro.git@v0.5.0"
+pip install "git+https://github.com/krahd/squarespace-to-astro.git@v0.5.1"
 python -m playwright install chromium
 ```
 
@@ -196,7 +196,7 @@ s2a generate-astro ./site-output/example/site_snapshot.json \
 Generation controls:
 
 - `--fidelity-mode high|balanced|minimal`: controls how aggressively the generator preserves Squarespace layout structure. `high` is the default.
-- `--layout-strategy hybrid|components`: chooses how layout-heavy pages are handled. `hybrid` preserves more original Squarespace HTML and embedded layout styling; `components` rebuilds known gallery and Fluid Engine patterns into Astro-friendly markup.
+- `--layout-strategy hybrid|components`: chooses how layout-heavy pages are handled. `hybrid` preserves more original Squarespace HTML and embedded layout styling; `components` rebuilds supported portfolio grids, gallery blocks, Fluid Engine sections, and classic-editor row/column layouts into Astro-friendly markup.
 - `--choose-layout-strategy`: prompts at runtime instead of silently using the default strategy.
 - `-md`, `--markdown`: prefers Markdown output when the conversion is clean, but still keeps HTML for layout-heavy content such as galleries, embeds, and Fluid Engine sections.
 

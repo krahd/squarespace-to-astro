@@ -10,7 +10,7 @@ import re
 import shutil
 from urllib.parse import urljoin, urlsplit
 
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup, Comment, Tag
 from markdownify import markdownify
 import yaml
 
@@ -54,11 +54,11 @@ TRANSPARENT_HEADER_MARKERS = (
     "header-overlay-alignment",
 )
 STRUCTURED_CONTENT_SELECTOR = (
-    ".s2a-gallery-grid, .s2a-fluid, .portfolio-grid-basic, .grid-wrapper, .sqs-gallery, .gallery-block, "
+    ".s2a-gallery-grid, .s2a-fluid, .s2a-classic-layout, .portfolio-grid-basic, .grid-wrapper, .sqs-gallery, .gallery-block, "
     "[data-fluid-engine-section], [data-fluid-engine], .fluid-engine, .fe-block, .embed-block, iframe"
 )
 FORCED_HTML_SELECTOR = (
-    ".s2a-gallery-grid, .s2a-fluid, [data-fluid-engine-section], [data-fluid-engine], .fluid-engine, "
+    ".s2a-gallery-grid, .s2a-fluid, .s2a-classic-layout, [data-fluid-engine-section], [data-fluid-engine], .fluid-engine, "
     ".fe-block, .embed-block, iframe"
 )
 LAYOUT_STYLE_MARKERS = (
@@ -1516,6 +1516,68 @@ body:not(.fidelity-high) .brand {
     border-top: 1px solid rgba(31, 27, 24, 0.18);
 }
 
+.s2a-classic-layout {
+    display: grid;
+    gap: 1rem;
+}
+
+.s2a-classic-row {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 1rem;
+    align-items: start;
+}
+
+.s2a-classic-column {
+    min-width: 0;
+    display: grid;
+    gap: 1rem;
+    grid-column: var(--s2a-col-start, 1) / span var(--s2a-col-span, 12);
+}
+
+.s2a-classic-block {
+    min-width: 0;
+}
+
+.s2a-classic-block > :first-child {
+    margin-top: 0;
+}
+
+.s2a-classic-block > :last-child {
+    margin-bottom: 0;
+}
+
+.s2a-media {
+    margin: 0;
+    display: grid;
+    gap: 0.75rem;
+}
+
+.s2a-media img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: calc(var(--radius-md) - 2px);
+}
+
+.s2a-media-caption,
+.s2a-embed-caption {
+    color: var(--muted);
+    font-size: 0.95rem;
+}
+
+.s2a-embed {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.s2a-embed img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: calc(var(--radius-md) - 2px);
+}
+
 .prose blockquote {
     margin: 1.5rem 0;
     padding: 0.75rem 1rem;
@@ -1572,6 +1634,14 @@ body:not(.fidelity-high) .brand {
     .prose .fluid-engine,
     .s2a-fluid {
         grid-template-columns: 1fr;
+    }
+
+    .s2a-classic-row {
+        grid-template-columns: 1fr;
+    }
+
+    .s2a-classic-column {
+        grid-column: 1 / -1;
     }
 
     .s2a-fluid-block {
@@ -2310,6 +2380,9 @@ def normalize_structured_html(
         rebuilt_fluid_html = rebuild_fluid_engine_components(html)
         if rebuilt_fluid_html:
             html = rebuilt_fluid_html
+        rebuilt_classic_html = rebuild_classic_editor_components(html)
+        if rebuilt_classic_html:
+            return rebuilt_classic_html
         rebuilt_gallery_html = rebuild_gallery_components(html)
         if rebuilt_gallery_html:
             return rebuilt_gallery_html
@@ -2402,6 +2475,365 @@ def build_fluid_engine_section(soup: BeautifulSoup, section: Tag) -> Tag | None:
     return rebuilt_section
 
 
+def rebuild_classic_editor_components(html: str) -> str | None:
+    soup = BeautifulSoup(html, "html.parser")
+    rebuilt_any = False
+
+    for layout in soup.find_all(is_sqs_layout):
+        if layout.find_parent(is_sqs_layout) is not None:
+            continue
+        if layout.find_parent(lambda tag: isinstance(tag, Tag) and tag.has_attr("data-fluid-engine-section")) is not None:
+            continue
+
+        rebuilt_layout = build_classic_editor_layout(soup, layout)
+        if rebuilt_layout is None:
+            continue
+
+        layout.replace_with(rebuilt_layout)
+        rebuilt_any = True
+
+    if not rebuilt_any:
+        return None
+
+    return soup.decode().strip()
+
+
+def is_sqs_layout(tag: Tag | None) -> bool:
+    return isinstance(tag, Tag) and tag.name == "div" and "sqs-layout" in class_tokens(tag)
+
+
+def build_classic_editor_layout(soup: BeautifulSoup, layout: Tag) -> Tag | None:
+    rows = [child for child in layout.find_all(recursive=False) if is_classic_editor_row(child)]
+    if not rows and classic_direct_blocks(layout):
+        rows = [layout]
+    if not rows:
+        return None
+
+    rebuilt_layout = soup.new_tag("div")
+    rebuilt_layout["class"] = "s2a-classic-layout"
+    rebuilt_layout["data-classic-editor"] = "componentized"
+
+    for row in rows:
+        rebuilt_row = build_classic_editor_row(soup, row)
+        if rebuilt_row is not None:
+            rebuilt_layout.append(rebuilt_row)
+
+    if not rebuilt_layout.contents:
+        return None
+
+    return rebuilt_layout
+
+
+def is_classic_editor_row(tag: Tag | None) -> bool:
+    tokens = class_tokens(tag)
+    return isinstance(tag, Tag) and tag.name == "div" and "row" in tokens and "sqs-row" in tokens
+
+
+def build_classic_editor_row(soup: BeautifulSoup, row: Tag) -> Tag | None:
+    columns = [
+        child
+        for child in row.find_all(recursive=False)
+        if isinstance(child, Tag) and any(token.startswith("sqs-col-") for token in class_tokens(child))
+    ]
+    if not columns and classic_direct_blocks(row):
+        columns = [row]
+    if not columns:
+        return None
+
+    rebuilt_row = soup.new_tag("div")
+    rebuilt_row["class"] = "s2a-classic-row"
+
+    start_column = 1
+    for column in columns:
+        rebuilt_column = build_classic_editor_column(soup, column, start_column)
+        if rebuilt_column is not None:
+            rebuilt_row.append(rebuilt_column)
+        start_column += classic_column_span(column)
+
+    if not rebuilt_row.contents:
+        return None
+
+    return rebuilt_row
+
+
+def build_classic_editor_column(soup: BeautifulSoup, column: Tag, start_column: int) -> Tag | None:
+    blocks = classic_direct_blocks(column)
+    if not blocks:
+        return None
+
+    rebuilt_column = soup.new_tag("div")
+    rebuilt_column["class"] = "s2a-classic-column"
+    rebuilt_column["style"] = (
+        f"--s2a-col-start: {max(1, min(start_column, 12))}; "
+        f"--s2a-col-span: {classic_column_span(column)};"
+    )
+
+    for block in blocks:
+        rebuilt_block = build_classic_editor_block(soup, block)
+        if rebuilt_block is not None:
+            rebuilt_column.append(rebuilt_block)
+
+    if not rebuilt_column.contents:
+        return None
+
+    return rebuilt_column
+
+
+def classic_direct_blocks(node: Tag) -> list[Tag]:
+    blocks: list[Tag] = []
+    for child in node.find_all(recursive=False):
+        if not isinstance(child, Tag):
+            continue
+        tokens = class_tokens(child)
+        if "sqs-block" in tokens or any(token.startswith("sqs-block-") for token in tokens):
+            blocks.append(child)
+    return blocks
+
+
+def classic_column_span(node: Tag) -> int:
+    for token in class_tokens(node):
+        match = re.fullmatch(r"(?:sqs-col|span)-(\d+)", token)
+        if match:
+            return max(1, min(int(match.group(1)), 12))
+    return 12
+
+
+def build_classic_editor_block(soup: BeautifulSoup, block: Tag) -> Tag | None:
+    block_kind = classic_block_kind(block)
+    if block_kind == "gallery":
+        block_html = rebuild_gallery_components(str(block)) or classic_generic_block_html(block)
+    elif block_kind == "image":
+        block_html = classic_image_block_html(block)
+    elif block_kind == "text":
+        block_html = classic_text_block_html(block)
+    elif block_kind == "embed":
+        block_html = classic_embed_block_html(block)
+    elif block_kind == "rule":
+        block_html = "<hr />"
+    else:
+        block_html = classic_generic_block_html(block)
+
+    if not component_html_is_meaningful(block_html):
+        return None
+
+    rebuilt_block = soup.new_tag("div")
+    rebuilt_block["class"] = f"s2a-classic-block s2a-classic-block--{block_kind}"
+    if block.get("id"):
+        rebuilt_block["data-sqs-block"] = block.get("id")
+
+    block_fragment = BeautifulSoup(block_html, "html.parser")
+    for child in list(block_fragment.contents):
+        rebuilt_block.append(child)
+
+    return rebuilt_block
+
+
+def classic_block_kind(block: Tag) -> str:
+    tokens = class_tokens(block)
+    if "gallery-block" in tokens or block.select_one(".sqs-gallery, .sqs-gallery-design-grid, .sqs-gallery-block-grid") is not None:
+        return "gallery"
+    if "horizontalrule-block" in tokens or block.get("data-block-type") == "47":
+        return "rule"
+    if (
+        block.get("data-sqsp-block") in {"embed", "video"}
+        or "embed-block" in tokens
+        or "video-block" in tokens
+        or block.select_one("iframe") is not None
+        or block.select_one("[data-html]") is not None
+    ):
+        return "embed"
+    if "image-block" in tokens or block.select_one("img") is not None:
+        return "image"
+    if (
+        block.select_one(".sqs-html-content") is not None
+        or "website-component-block" in tokens
+        or "html-block" in tokens
+        or "markdown-block" in tokens
+    ):
+        return "text"
+    return "html"
+
+
+def classic_image_block_html(block: Tag) -> str:
+    image = block.find("img")
+    if image is None:
+        return ""
+
+    rebuilt = BeautifulSoup("", "html.parser")
+    figure = rebuilt.new_tag("figure")
+    figure["class"] = "s2a-media"
+
+    image_fragment = BeautifulSoup(str(image), "html.parser")
+    rebuilt_image = image_fragment.find("img")
+    if rebuilt_image is None:
+        return ""
+    cleanup_media_tag(rebuilt_image)
+    figure.append(rebuilt_image)
+
+    caption_source = block.select_one(".image-caption")
+    caption_html = component_inner_html(caption_source)
+    if component_html_is_meaningful(caption_html):
+        caption = rebuilt.new_tag("figcaption")
+        caption["class"] = "s2a-media-caption"
+        caption_fragment = BeautifulSoup(caption_html, "html.parser")
+        for child in list(caption_fragment.contents):
+            caption.append(child)
+        figure.append(caption)
+
+    rebuilt.append(figure)
+    return rebuilt.decode().strip()
+
+
+def classic_text_block_html(block: Tag) -> str:
+    container = block.select_one(".sqs-html-content") or block.select_one(".sqs-block-content")
+    return component_inner_html(container)
+
+
+def classic_embed_block_html(block: Tag) -> str:
+    payload = parse_block_json(block)
+    rebuilt = BeautifulSoup("", "html.parser")
+    wrapper = rebuilt.new_tag("div")
+    wrapper["class"] = "s2a-embed"
+
+    iframe = block.find("iframe")
+    iframe_html = ""
+    if iframe is not None:
+        iframe_html = str(iframe)
+    else:
+        data_html = first_non_empty(
+            block.select_one("[data-html]") and block.select_one("[data-html]").get("data-html"),
+            payload.get("html") if payload else None,
+        )
+        if data_html:
+            iframe_html = unescape(data_html)
+
+    iframe_fragment = BeautifulSoup(iframe_html, "html.parser") if iframe_html else BeautifulSoup("", "html.parser")
+    rebuilt_iframe = iframe_fragment.find("iframe")
+    if rebuilt_iframe is not None:
+        src = normalize_protocol_relative_url(rebuilt_iframe.get("src"))
+        if src:
+            rebuilt_iframe["src"] = src
+        rebuilt_iframe.attrs.pop("srcdoc", None)
+        wrapper.append(rebuilt_iframe)
+    else:
+        thumbnail_url = normalize_protocol_relative_url(payload.get("thumbnailUrl") if payload else None)
+        if thumbnail_url:
+            thumbnail = rebuilt.new_tag("img", src=thumbnail_url)
+            thumbnail["alt"] = payload.get("providerName") or "Embedded media preview"
+            wrapper.append(thumbnail)
+
+        video_url = normalize_protocol_relative_url(payload.get("url") if payload else None)
+        if video_url:
+            paragraph = rebuilt.new_tag("p")
+            link = rebuilt.new_tag("a", href=video_url)
+            link.string = payload.get("providerName") or "Open embedded media"
+            paragraph.append(link)
+            wrapper.append(paragraph)
+
+    description_html = ""
+    if payload:
+        description = payload.get("description")
+        if isinstance(description, dict):
+            description_html = description.get("html") or ""
+    if not description_html:
+        description_html = component_inner_html(block.select_one(".sqs-html-content, figcaption"))
+
+    if component_html_is_meaningful(description_html):
+        caption = rebuilt.new_tag("div")
+        caption["class"] = "s2a-embed-caption"
+        caption_fragment = BeautifulSoup(description_html, "html.parser")
+        for child in list(caption_fragment.contents):
+            caption.append(child)
+        wrapper.append(caption)
+
+    if not wrapper.contents:
+        return ""
+
+    rebuilt.append(wrapper)
+    return rebuilt.decode().strip()
+
+
+def classic_generic_block_html(block: Tag) -> str:
+    container = block.select_one(".sqs-block-content") or block
+    return component_inner_html(container)
+
+
+def component_inner_html(container: Tag | None) -> str:
+    if container is None:
+        return ""
+
+    fragment = BeautifulSoup("".join(str(child) for child in container.contents), "html.parser")
+    sanitize_component_fragment(fragment)
+    return fragment.decode().strip()
+
+
+def sanitize_component_fragment(fragment: BeautifulSoup) -> None:
+    for comment in list(fragment.find_all(string=lambda value: isinstance(value, Comment))):
+        comment.extract()
+
+    for tag in list(fragment.find_all(["script", "noscript", "style", "meta", "link", "xml"])):
+        tag.decompose()
+
+    for tag in list(fragment.find_all(lambda current: isinstance(current, Tag) and current.name and ":" in current.name)):
+        if list(tag.stripped_strings):
+            tag.unwrap()
+        else:
+            tag.decompose()
+
+    for paragraph in list(fragment.find_all("p")):
+        text = paragraph.get_text(" ", strip=True).replace("\xa0", "").strip()
+        if not text and paragraph.find(["img", "iframe", "video", "audio", "source"]) is None:
+            paragraph.decompose()
+
+    for image in fragment.find_all("img"):
+        cleanup_media_tag(image)
+
+    for iframe in fragment.find_all("iframe"):
+        src = normalize_protocol_relative_url(iframe.get("src"))
+        if src:
+            iframe["src"] = src
+
+
+def cleanup_media_tag(tag: Tag) -> None:
+    for attribute in ("onload", "data-load", "data-loader", "decoding"):
+        tag.attrs.pop(attribute, None)
+    src = normalize_protocol_relative_url(tag.get("src"))
+    if src:
+        tag["src"] = src
+
+
+def normalize_protocol_relative_url(value: str | None) -> str | None:
+    if not value:
+        return value
+    if value.startswith("//"):
+        return f"https:{value}"
+    return value
+
+
+def parse_block_json(block: Tag) -> dict:
+    raw_payload = block.get("data-block-json")
+    if not raw_payload:
+        return {}
+
+    try:
+        payload = json.loads(raw_payload)
+    except json.JSONDecodeError:
+        return {}
+
+    return payload if isinstance(payload, dict) else {}
+
+
+def component_html_is_meaningful(html: str) -> bool:
+    if not html.strip():
+        return False
+
+    fragment = BeautifulSoup(html, "html.parser")
+    if fragment.find(["img", "iframe", "video", "audio", "hr", "figure", "section"]):
+        return True
+
+    return bool(" ".join(fragment.stripped_strings))
+
+
 def parse_fluid_engine_layout(section: Tag) -> dict[str, dict[str, str]]:
     layout_map: dict[str, dict[str, str]] = {}
     style_text = "\n".join(style_tag.get_text("\n", strip=True)
@@ -2465,11 +2897,13 @@ def fluid_block_content_html(block: Tag) -> str:
 
 def rebuild_gallery_components(html: str) -> str | None:
     soup = BeautifulSoup(html, "html.parser")
-    grid = soup.select_one(".portfolio-grid-basic, .grid-wrapper, .sqs-gallery-design-grid")
+    grid = soup.select_one(
+        ".portfolio-grid-basic, .grid-wrapper, .sqs-gallery-design-grid, .sqs-gallery-block-grid, .sqs-gallery"
+    )
     if grid is None:
         return None
 
-    items = grid.select(".grid-item, .gallery-item, .sqs-gallery-design-grid-slide")
+    items = grid.select(".grid-item, .gallery-item, .sqs-gallery-design-grid-slide, .slide")
     if not items:
         items = [child for child in grid.find_all(recursive=False) if child.find("img")]
     if len(items) < 3:
