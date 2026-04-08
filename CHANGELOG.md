@@ -6,6 +6,17 @@ The format is based on Keep a Changelog, and this project uses semantic versioni
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-04-07
+
+### Added in 0.5.0
+
+- automatic in-place upgrades for legacy `asset_manifest.json` files that still reference hash-suffixed localized filenames during `generate-astro`
+
+### Changed in 0.5.0
+
+- generated Astro output now keeps route-based localized asset names even when the source snapshot was crawled before the filename cleanup
+- CLI generation summaries now surface upgrade warnings and fail cleanly when a legacy asset manifest cannot be repaired because the expected localized files are missing
+
 ## [0.4.0] - 2026-04-07
 
 ### Added in 0.4.0

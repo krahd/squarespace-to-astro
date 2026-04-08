@@ -39,7 +39,7 @@ If you need to run s2a from source instead of using Homebrew or the standalone b
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install "git+https://github.com/krahd/squarespace-to-astro.git@v0.4.0"
+pip install "git+https://github.com/krahd/squarespace-to-astro.git@v0.5.0"
 python -m playwright install chromium
 ```
 
