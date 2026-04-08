@@ -2,6 +2,8 @@
 
 `s2a` is a Python CLI for extracting content from Squarespace and generating an editable [Astro](https://github.com/withastro/astro) project. This README is the repository entry point for developers, contributors, and advanced users who want to run the project from source or understand how the codebase is organized.
 
+Current release: `v0.5.0`.
+
 For end-user installation and day-to-day usage:
 
 - Project website: [krahd.github.io/squarespace-to-astro](https://krahd.github.io/squarespace-to-astro/)
@@ -21,10 +23,12 @@ The current implementation supports these main workflows:
 
 - probing a target site for Squarespace indicators, sitemap availability, robots behavior, password gates, and `?format=json-pretty` support
 - crawling a site into a structured snapshot of pages, links, assets, headings, and opportunistic Squarespace JSON data
-- estimating and downloading Squarespace-hosted assets during `crawl` and `migrate`, with a confirmation prompt and text progress output
+- estimating and downloading Squarespace-hosted assets during `crawl` and `migrate`, with a confirmation prompt, text progress output, route-based public filenames, and content-hash deduplication recorded in `asset_manifest.json`
 - capturing browser-authenticated session state with Playwright and reusing those cookies during probe and crawl runs
 - importing Squarespace WordPress XML exports into a normalized JSON format
-- generating a buildable [Astro](https://github.com/withastro/astro) project from crawl output plus optional XML content
+- generating a buildable [Astro](https://github.com/withastro/astro) project from crawl output plus optional XML content, including `--fidelity-mode`, `--layout-strategy`, `--choose-layout-strategy`, and `--markdown` controls for layout-heavy pages
+- orchestrating probe, crawl, optional XML import, asset download, and Astro generation in one `s2a migrate` workflow
+- upgrading older snapshot-root `asset_manifest.json` files automatically during `generate-astro` so legacy hash-suffixed localized filenames are rewritten to the current route-based naming scheme
 
 Current boundaries:
 
@@ -87,7 +91,7 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) for a fuller explanation of the test layout
 
 ## CLI workflows
 
-The CLI exposes five main user-facing workflows plus the combined migration command:
+The CLI exposes six user-facing commands, including the combined migration workflow:
 
 - `s2a probe`
 - `s2a crawl`
@@ -100,7 +104,7 @@ Usage examples and end-user task flows live in [USER_GUIDE.md](USER_GUIDE.md). T
 
 ## Distribution
 
-This project currently ships in three ways:
+This project currently ships in three ways. The current release is `v0.5.0`.
 
 - standalone binary bundles attached to GitHub Releases
 - a Homebrew formula published through `krahd/homebrew-tap`

@@ -1,17 +1,19 @@
 # Roadmap
 
-This roadmap reflects the current `0.3.x` codebase and is meant to guide contribution priorities. It describes the main areas the project should improve next; it is not a release guarantee.
+This roadmap reflects the current `0.5.x` codebase and is meant to guide contribution priorities. It describes the main areas the project should improve next; it is not a release guarantee.
 
 ## Current baseline
 
 The project already provides a usable end-to-end migration pipeline for many public Squarespace sites:
 
 - `s2a probe` inspects Squarespace signals, JSON endpoint availability, sitemap and robots behavior, RSS feeds, and password gates.
-- `s2a crawl` discovers internal pages, stores raw HTML and opportunistic `?format=json-pretty` payloads, records links, headings, and assets, and writes crawl reports.
+- `s2a crawl` discovers internal pages, stores raw HTML and opportunistic `?format=json-pretty` payloads, records links, headings, and assets, can estimate and download localized assets, and writes crawl reports plus an `asset_manifest.json`.
 - `s2a auth-browser` captures Playwright storage state for account-authenticated or password-gated content.
 - `s2a import-xml` normalizes Squarespace WordPress XML exports into JSON.
-- `s2a generate-astro` builds an editable Astro project with content collections, navigation, asset localization, and migration warnings.
+- `s2a generate-astro` builds an editable Astro project with fidelity controls, content collections, navigation, route-based asset localization, and migration warnings.
 - `s2a migrate` orchestrates probe, crawl, optional XML import, asset download, and Astro generation in one workflow.
+- layout-heavy generation already supports `--fidelity-mode`, `--layout-strategy`, `--choose-layout-strategy`, and `--markdown`, with hybrid HTML preservation and component reconstruction for supported gallery and Fluid Engine patterns.
+- localized media now use readable route-based filenames, deduplicate identical bytes across pages, and automatically upgrade older hash-suffixed snapshot manifests during generation.
 - release tooling already covers standalone bundles, Homebrew publication, and the project documentation site.
 
 ## Toward 1.0
@@ -20,10 +22,10 @@ Before the CLI should be treated as a stable general-purpose migration path, the
 
 ### 1. Generated site fidelity
 
-- make generated homepages match source-site structure more closely instead of falling back to generic content when extraction is thin
-- improve navigation, page hierarchy, headings, metadata, and section ordering in generated output
+- make generated homepages, folders, and index-style pages match source-site structure more closely when extraction falls back from structured data to raw HTML
+- expand component reconstruction beyond the current gallery and Fluid Engine coverage so more layout-heavy pages avoid generic wrappers
 - preserve more of the source site's styling intent while keeping the generated Astro project easy to edit by hand
-- strengthen asset localization for responsive images, downloadable files, and media-heavy pages
+- improve how reusable blocks, responsive media variants, and mixed Markdown/HTML sections are represented in output
 
 ### 2. Content coverage and extraction depth
 
@@ -41,7 +43,7 @@ Before the CLI should be treated as a stable general-purpose migration path, the
 ### 4. Migration follow-up and reporting
 
 - add redirect-planning output based on discovered URLs, canonical URLs, and generated routes
-- expand migration reports so users can see what was migrated, skipped, downgraded, or still needs manual cleanup
+- expand migration reports so users can see what was migrated, skipped, downgraded, auto-upgraded, or still needs manual cleanup
 - make reruns easier to compare by improving manifest detail and output consistency
 - add clearer guidance for manual follow-up tasks inside the generated project and CLI summaries
 
@@ -54,7 +56,7 @@ Before the CLI should be treated as a stable general-purpose migration path, the
 ## Longer-horizon work
 
 - richer theme and styling parity between the source Squarespace site and the generated Astro starter
-- more deliberate support for portfolios, galleries, and other media-heavy site structures
+- broader support for portfolios, galleries, and other media-heavy site structures beyond the patterns already reconstructed today
 - optional post-migration helpers for content cleanup, route review, or template refinement
 - broader installation and verification coverage across supported binary targets
 

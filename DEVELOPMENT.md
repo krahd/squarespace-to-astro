@@ -41,12 +41,18 @@ Main commands:
 
 The source of truth for command names, flags, defaults, and help text is [src/s2a/cli.py](src/s2a/cli.py).
 
+Current generator-specific behavior to keep in mind while changing the codebase:
+
+- `generate-astro` and `migrate` support `--fidelity-mode`, `--layout-strategy`, `--choose-layout-strategy`, and `--markdown` to trade off editability against visual fidelity.
+- localized assets are written under route-based public paths such as `/assets/images/be-water-1.webp`, while `asset_manifest.json` keeps alias URLs and content-hash deduplication metadata.
+- older snapshot-root `asset_manifest.json` files that still contain hash-suffixed localized filenames are upgraded automatically during generation before the Astro project is written.
+
 ## Execution flow
 
 The common migration path is:
 
 1. `probe` inspects target behavior and writes a capability summary.
-2. `crawl` captures pages, discovered links, and available structured data into a snapshot.
+2. `crawl` captures pages, discovered links, available structured data, and optional localized asset downloads into a snapshot.
 3. `import-xml` optionally normalizes a Squarespace WordPress XML export.
 4. `generate-astro` converts the snapshot and optional XML data into an editable Astro project.
 5. `migrate` orchestrates the above as a single command.
@@ -61,12 +67,14 @@ Important outputs include:
 - `probe.json`: probe results
 - `site_snapshot.json`: normalized crawl snapshot
 - `report.json`: crawl summary
+- `asset_manifest.json`: localized asset metadata, alias tracking, and deduplication details
+- `downloaded-assets/`: localized files staged before Astro output rewriting
 - `auth/storage_state.json`: Playwright storage state for authenticated reuse
 - `xml_import.json`: normalized XML import data
 - `astro_generation.json`: generator summary
 - `migration-manifest.json`: generated Astro content manifest
 
-The generated Astro project itself is written either to the directory passed via `--output-dir` for `generate-astro` or to `--astro-dir` for `migrate`.
+The generated Astro project itself is written either to the directory passed via `--output-dir` for `generate-astro` or to `--astro-dir` for `migrate`. When no posts are detected, the generator emits a pages-only content configuration instead of a posts collection scaffold.
 
 ## Testing
 

@@ -21,6 +21,11 @@
           is the quickest path for an end user who wants to install the tool, run a migration, and
           understand what the generated output looks like.
         </p>
+        <p>
+          <strong>Current release:</strong> v0.5.0. Recent updates add higher-fidelity generation
+          controls, route-based localized asset names, and automatic upgrades for older snapshots
+          that still use hash-suffixed asset filenames.
+        </p>
         <div class="actions">
           <a href="https://github.com/krahd/squarespace-to-astro/blob/main/USER_GUIDE.md">Detailed User Guide</a>
           <a href="https://github.com/krahd/squarespace-to-astro/releases">Releases</a>
@@ -37,7 +42,8 @@
               <p>
                 s2a captures a structured snapshot of a Squarespace site and can turn that snapshot
                 into a buildable <a href="https://github.com/withastro/astro">Astro</a> project
-                with Markdown content, route files, layout files, and site data.
+                with Markdown or preserved HTML content, route files, layout files, site data, and
+                localized assets under readable route-based filenames.
               </p>
             </article>
             <article>
@@ -106,6 +112,11 @@ brew install s2a</code></pre>
             <code>site-output/</code> and records the main artifacts in
             <code>execution-metadata.json</code>.
           </p>
+          <p>
+            For layout-heavy sites, the current release also supports
+            <code>--fidelity-mode high --layout-strategy hybrid</code>. Add
+            <code>--markdown</code> if you want Markdown when the conversion stays clean.
+          </p>
         </section>
 
         <section class="surface">
@@ -137,6 +148,7 @@ s2a migrate https://example.squarespace.com \
                 <li><code>probe.json</code></li>
                 <li><code>site_snapshot.json</code></li>
                 <li><code>report.json</code></li>
+                <li><code>asset_manifest.json</code> and <code>downloaded-assets/</code></li>
                 <li><code>raw-html/</code> and <code>raw-json/</code></li>
               </ul>
             </article>
@@ -145,8 +157,9 @@ s2a migrate https://example.squarespace.com \
               <ul>
                 <li><code>migration-manifest.json</code></li>
                 <li><code>src/content/pages/</code></li>
-                <li><code>src/content/posts/</code></li>
+                <li><code>src/content/posts/</code> when posts were detected</li>
                 <li><code>src/data/site.json</code></li>
+                <li><code>public/assets/</code> for localized media and files</li>
                 <li><code>src/layouts/</code> and <code>src/pages/</code></li>
               </ul>
             </article>
@@ -174,7 +187,7 @@ npm run dev</code></pre>
           <ul>
             <li>2FA is not supported in the automated browser-auth flow.</li>
             <li>Commerce, events, forms, members, and full Squarespace admin automation are not migrated.</li>
-            <li>Asset downloading and redirect generation are still pending.</li>
+            <li>Redirect generation is still pending.</li>
             <li>The generated Astro project should be reviewed and edited before production use.</li>
           </ul>
         </section>
