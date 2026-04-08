@@ -903,15 +903,11 @@ def test_generate_astro_project_localizes_asset_urls_and_copies_downloads(tmp_pa
         """,
     )
 
-    hero_suffix = hashlib.sha256(b"hero-bytes").hexdigest()[:12]
-    brochure_suffix = hashlib.sha256(b"brochure-bytes").hexdigest()[:12]
-    poster_suffix = hashlib.sha256(b"poster-bytes").hexdigest()[:12]
-    video_suffix = hashlib.sha256(b"video-bytes").hexdigest()[:12]
     downloaded_files = {
-        f"downloaded-assets/images/hero-{hero_suffix}.jpg": b"hero-bytes",
-        f"downloaded-assets/files/brochure-{brochure_suffix}.pdf": b"brochure-bytes",
-        f"downloaded-assets/images/poster-{poster_suffix}.jpg": b"poster-bytes",
-        f"downloaded-assets/videos/clip-{video_suffix}.mp4": b"video-bytes",
+        "downloaded-assets/images/media-1.jpg": b"hero-bytes",
+        "downloaded-assets/files/brochure.pdf": b"brochure-bytes",
+        "downloaded-assets/images/media-2-poster.jpg": b"poster-bytes",
+        "downloaded-assets/videos/media-2.mp4": b"video-bytes",
     }
     for relative_path, content in downloaded_files.items():
         file_path = snapshot_dir / relative_path
@@ -929,9 +925,9 @@ def test_generate_astro_project_localizes_asset_urls_and_copies_downloads(tmp_pa
                     asset_type="image",
                     owner_route="/media",
                     group_key="img-1",
-                    filename=f"hero-{hero_suffix}.jpg",
-                    local_path=f"downloaded-assets/images/hero-{hero_suffix}.jpg",
-                    public_path=f"/assets/images/hero-{hero_suffix}.jpg",
+                    filename="media-1.jpg",
+                    local_path="downloaded-assets/images/media-1.jpg",
+                    public_path="/assets/images/media-1.jpg",
                     canonical_id=hashlib.sha256(b"hero-bytes").hexdigest(),
                 ),
                 DownloadedAsset(
@@ -940,9 +936,9 @@ def test_generate_astro_project_localizes_asset_urls_and_copies_downloads(tmp_pa
                     asset_type="file",
                     owner_route="/media",
                     group_key="a-2",
-                    filename=f"brochure-{brochure_suffix}.pdf",
-                    local_path=f"downloaded-assets/files/brochure-{brochure_suffix}.pdf",
-                    public_path=f"/assets/files/brochure-{brochure_suffix}.pdf",
+                    filename="brochure.pdf",
+                    local_path="downloaded-assets/files/brochure.pdf",
+                    public_path="/assets/files/brochure.pdf",
                     canonical_id=hashlib.sha256(b"brochure-bytes").hexdigest(),
                 ),
                 DownloadedAsset(
@@ -951,9 +947,9 @@ def test_generate_astro_project_localizes_asset_urls_and_copies_downloads(tmp_pa
                     asset_type="image",
                     owner_route="/media",
                     group_key="video-3",
-                    filename=f"poster-{poster_suffix}.jpg",
-                    local_path=f"downloaded-assets/images/poster-{poster_suffix}.jpg",
-                    public_path=f"/assets/images/poster-{poster_suffix}.jpg",
+                    filename="media-2-poster.jpg",
+                    local_path="downloaded-assets/images/media-2-poster.jpg",
+                    public_path="/assets/images/media-2-poster.jpg",
                     canonical_id=hashlib.sha256(b"poster-bytes").hexdigest(),
                 ),
                 DownloadedAsset(
@@ -962,9 +958,9 @@ def test_generate_astro_project_localizes_asset_urls_and_copies_downloads(tmp_pa
                     asset_type="video",
                     owner_route="/media",
                     group_key="video-3",
-                    filename=f"clip-{video_suffix}.mp4",
-                    local_path=f"downloaded-assets/videos/clip-{video_suffix}.mp4",
-                    public_path=f"/assets/videos/clip-{video_suffix}.mp4",
+                    filename="media-2.mp4",
+                    local_path="downloaded-assets/videos/media-2.mp4",
+                    public_path="/assets/videos/media-2.mp4",
                     canonical_id=hashlib.sha256(b"video-bytes").hexdigest(),
                 ),
             ],
@@ -1010,21 +1006,17 @@ def test_generate_astro_project_localizes_asset_urls_and_copies_downloads(tmp_pa
     content = (output_dir / "src/content/pages/media.md").read_text(encoding="utf-8")
 
     assert result.pages_written == 2
-    assert f"/assets/images/hero-{hero_suffix}.jpg" in content
-    assert f"/assets/files/brochure-{brochure_suffix}.pdf" in content
-    assert f"/assets/images/poster-{poster_suffix}.jpg" in content
-    assert f"/assets/videos/clip-{video_suffix}.mp4" in content
+    assert "/assets/images/media-1.jpg" in content
+    assert "/assets/files/brochure.pdf" in content
+    assert "/assets/images/media-2-poster.jpg" in content
+    assert "/assets/videos/media-2.mp4" in content
     assert "data:image/gif" not in content
     assert "images.squarespace-cdn.com" not in content
     assert "static1.squarespace.com" not in content
-    assert (output_dir /
-            f"public/assets/images/hero-{hero_suffix}.jpg").read_bytes() == b"hero-bytes"
-    assert (output_dir /
-            f"public/assets/files/brochure-{brochure_suffix}.pdf").read_bytes() == b"brochure-bytes"
-    assert (output_dir /
-            f"public/assets/images/poster-{poster_suffix}.jpg").read_bytes() == b"poster-bytes"
-    assert (output_dir /
-            f"public/assets/videos/clip-{video_suffix}.mp4").read_bytes() == b"video-bytes"
+    assert (output_dir / "public/assets/images/media-1.jpg").read_bytes() == b"hero-bytes"
+    assert (output_dir / "public/assets/files/brochure.pdf").read_bytes() == b"brochure-bytes"
+    assert (output_dir / "public/assets/images/media-2-poster.jpg").read_bytes() == b"poster-bytes"
+    assert (output_dir / "public/assets/videos/media-2.mp4").read_bytes() == b"video-bytes"
 
 
 def test_generate_astro_project_rewrites_alias_urls_to_one_canonical_asset(tmp_path: Path) -> None:
@@ -1036,8 +1028,7 @@ def test_generate_astro_project_rewrites_alias_urls_to_one_canonical_asset(tmp_p
     source_url = "https://images.squarespace-cdn.com/content/hero-a.jpg"
     shared_bytes = b"shared-hero-bytes"
     shared_hash = hashlib.sha256(shared_bytes).hexdigest()
-    shared_suffix = shared_hash[:12]
-    localized_relative_path = f"downloaded-assets/images/hero-a-{shared_suffix}.jpg"
+    localized_relative_path = "downloaded-assets/images/home-1.jpg"
 
     write_text(
         raw_html_dir / "index.html",
@@ -1062,9 +1053,9 @@ def test_generate_astro_project_rewrites_alias_urls_to_one_canonical_asset(tmp_p
                     asset_type="image",
                     owner_route="/",
                     group_key="img-1",
-                    filename=f"hero-a-{shared_suffix}.jpg",
+                    filename="home-1.jpg",
                     local_path=localized_relative_path,
-                    public_path=f"/assets/images/hero-a-{shared_suffix}.jpg",
+                    public_path="/assets/images/home-1.jpg",
                     canonical_id=shared_hash,
                     alias_source_urls=[alias_url],
                     deduplicated_from_count=2,
@@ -1125,8 +1116,7 @@ def test_generate_astro_project_rewrites_alias_urls_to_one_canonical_asset(tmp_p
     gallery_content = (output_dir / "src/content/pages/gallery.md").read_text(encoding="utf-8")
 
     assert result.pages_written == 2
-    assert f"/assets/images/hero-a-{shared_suffix}.jpg" in home_content
-    assert f"/assets/images/hero-a-{shared_suffix}.jpg" in gallery_content
-    assert (output_dir /
-            f"public/assets/images/hero-a-{shared_suffix}.jpg").read_bytes() == shared_bytes
+    assert "/assets/images/home-1.jpg" in home_content
+    assert "/assets/images/home-1.jpg" in gallery_content
+    assert (output_dir / "public/assets/images/home-1.jpg").read_bytes() == shared_bytes
     assert len(list((output_dir / "public/assets/images").iterdir())) == 1

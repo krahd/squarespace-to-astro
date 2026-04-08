@@ -135,7 +135,7 @@ The other files depend on the command you run.
   Records canonical localized asset paths, plus any alias Squarespace URLs that were merged into the same downloaded file.
 - `report.json`
 - `downloaded-assets/`
-  Stores localized files under deterministic family directories (`images/`, `videos/`, `audio/`, and `files/`). When two Squarespace asset URLs resolve to identical content, the crawler keeps one canonical file and reuses that path everywhere.
+  Stores localized files under deterministic family directories (`images/`, `videos/`, `audio/`, and `files/`). Media assets are named from the page route with stable per-page numbering such as `barcelona-1.webp` or `barcelona-2-poster.jpg`, while downloadable files keep readable names such as `pricing-guide.pdf`. When Squarespace exposes multiple width-specific variants inside the same size bucket, the filename keeps the width token instead of falling back to a bare counter, for example `barcelona-1-large-1500w.webp`. When two Squarespace asset URLs resolve to identical content, the crawler keeps one canonical file and reuses that path everywhere. The extension matches the bytes actually returned by Squarespace, so CDN-optimized images may end up as `.webp` even when the original URL looked like `.jpg` or `.png`.
 - `raw-html/`
 - `raw-json/`
 

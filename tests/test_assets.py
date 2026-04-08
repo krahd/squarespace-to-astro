@@ -1,4 +1,3 @@
-import hashlib
 from pathlib import Path
 
 import httpx
@@ -192,20 +191,16 @@ def test_download_snapshot_assets_downloads_squarespace_assets_with_friendly_nam
                 (completed, total, detail)),
         )
 
-    hero_suffix = hashlib.sha256(b"image-bytes").hexdigest()[:12]
-    guide_suffix = hashlib.sha256(b"%PDF-1.7").hexdigest()[:12]
     assert [item.public_path for item in manifest.items] == [
-        f"/assets/files/pricing-guide-{guide_suffix}.pdf",
-        f"/assets/images/hero-small-{hero_suffix}.jpg",
+        "/assets/files/pricing-guide.pdf",
+        "/assets/images/media-1-small.jpg",
     ]
     assert manifest.warnings == []
     assert manifest.source_asset_count == 2
     assert manifest.deduplicated_asset_count == 0
     assert progress_updates == [(0, 2, None), (1, 2, None), (2, 2, None)]
-    assert (
-        tmp_path / f"downloaded-assets/images/hero-small-{hero_suffix}.jpg").read_bytes() == b"image-bytes"
-    assert (
-        tmp_path / f"downloaded-assets/files/pricing-guide-{guide_suffix}.pdf").read_bytes() == b"%PDF-1.7"
+    assert (tmp_path / "downloaded-assets/images/media-1-small.jpg").read_bytes() == b"image-bytes"
+    assert (tmp_path / "downloaded-assets/files/pricing-guide.pdf").read_bytes() == b"%PDF-1.7"
 
 
 def test_download_snapshot_assets_merges_same_content_from_different_urls(tmp_path: Path) -> None:
@@ -284,17 +279,238 @@ def test_download_snapshot_assets_merges_same_content_from_different_urls(tmp_pa
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
         manifest = download_snapshot_assets(client, snapshot, tmp_path)
 
-    suffix = hashlib.sha256(shared_bytes).hexdigest()[:12]
-
     assert len(manifest.items) == 1
     assert manifest.source_asset_count == 2
     assert manifest.deduplicated_asset_count == 1
-    assert manifest.items[0].public_path == f"/assets/images/hero-a-{suffix}.jpg"
+    assert manifest.items[0].public_path == "/assets/images/media-1.jpg"
     assert manifest.items[0].alias_source_urls == [
         "https://images.squarespace-cdn.com/content/hero-b.jpg"
     ]
     assert manifest.items[0].deduplicated_from_count == 2
-    assert (tmp_path / f"downloaded-assets/images/hero-a-{suffix}.jpg").read_bytes() == shared_bytes
+    assert (tmp_path / "downloaded-assets/images/media-1.jpg").read_bytes() == shared_bytes
+
+
+def test_download_snapshot_assets_uses_route_labels_for_generic_cdn_image_names(tmp_path: Path) -> None:
+    snapshot = CrawlSnapshot(
+        generated_at="2026-04-05T00:00:00+00:00",
+        target_url="https://example.com/",
+        base_url="https://example.com/",
+        probe=SiteProbe(
+            target_url="https://example.com/",
+            final_home_url="https://example.com/",
+            site_origin="https://example.com",
+            homepage_status_code=200,
+            homepage_title="Example Site",
+            probably_squarespace=True,
+        ),
+        pages=[
+            PageSnapshot(
+                requested_url="https://example.com/projects/barcelona",
+                final_url="https://example.com/projects/barcelona",
+                status_code=200,
+                content_type="text/html",
+                title="Barcelona",
+                meta_description=None,
+                canonical_url="https://example.com/projects/barcelona",
+                assets=[
+                    AssetReference(
+                        source_url="https://images.squarespace-cdn.com/content/image-asset.png",
+                        asset_type="image",
+                        attribute="src",
+                        owner_route="/projects/barcelona",
+                        group_key="img-1",
+                    ),
+                    AssetReference(
+                        source_url="https://images.squarespace-cdn.com/content/image-asset-2.png",
+                        asset_type="image",
+                        attribute="src",
+                        owner_route="/projects/barcelona",
+                        group_key="img-2",
+                    ),
+                ],
+            )
+        ],
+    )
+
+    responses = {
+        "https://images.squarespace-cdn.com/content/image-asset.png": httpx.Response(
+            200,
+            content=b"barcelona-image-1",
+            headers={"content-type": "image/webp"},
+        ),
+        "https://images.squarespace-cdn.com/content/image-asset-2.png": httpx.Response(
+            200,
+            content=b"barcelona-image-2",
+            headers={"content-type": "image/webp"},
+        ),
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        response = responses.get(str(request.url))
+        if response is None:
+            raise AssertionError(f"Unexpected request for {request.url}")
+        return response
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        manifest = download_snapshot_assets(client, snapshot, tmp_path)
+
+    assert [item.public_path for item in manifest.items] == [
+        "/assets/images/barcelona-1.webp",
+        "/assets/images/barcelona-2.webp",
+    ]
+
+
+def test_download_snapshot_assets_uses_width_tokens_before_numeric_collision_suffixes(tmp_path: Path) -> None:
+    snapshot = CrawlSnapshot(
+        generated_at="2026-04-05T00:00:00+00:00",
+        target_url="https://example.com/",
+        base_url="https://example.com/",
+        probe=SiteProbe(
+            target_url="https://example.com/",
+            final_home_url="https://example.com/",
+            site_origin="https://example.com",
+            homepage_status_code=200,
+            homepage_title="Example Site",
+            probably_squarespace=True,
+        ),
+        pages=[
+            PageSnapshot(
+                requested_url="https://example.com/projects/barcelona",
+                final_url="https://example.com/projects/barcelona",
+                status_code=200,
+                content_type="text/html",
+                title="Barcelona",
+                meta_description=None,
+                canonical_url="https://example.com/projects/barcelona",
+                assets=[
+                    AssetReference(
+                        source_url="https://images.squarespace-cdn.com/content/image-asset.png?format=1000w",
+                        asset_type="image",
+                        attribute="srcset",
+                        owner_route="/projects/barcelona",
+                        group_key="img-213",
+                        variant_hint="large",
+                    ),
+                    AssetReference(
+                        source_url="https://images.squarespace-cdn.com/content/image-asset.png?format=1500w",
+                        asset_type="image",
+                        attribute="srcset",
+                        owner_route="/projects/barcelona",
+                        group_key="img-213",
+                        variant_hint="large",
+                    ),
+                ],
+            )
+        ],
+    )
+
+    responses = {
+        "https://images.squarespace-cdn.com/content/image-asset.png?format=1000w": httpx.Response(
+            200,
+            content=b"barcelona-image-1000",
+            headers={"content-type": "image/webp"},
+        ),
+        "https://images.squarespace-cdn.com/content/image-asset.png?format=1500w": httpx.Response(
+            200,
+            content=b"barcelona-image-1500",
+            headers={"content-type": "image/webp"},
+        ),
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        response = responses.get(str(request.url))
+        if response is None:
+            raise AssertionError(f"Unexpected request for {request.url}")
+        return response
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        manifest = download_snapshot_assets(client, snapshot, tmp_path)
+
+    assert sorted(item.public_path for item in manifest.items) == [
+        "/assets/images/barcelona-1-large-1500w.webp",
+        "/assets/images/barcelona-1-large.webp",
+    ]
+
+
+def test_download_snapshot_assets_expands_route_labels_when_page_suffixes_collide(tmp_path: Path) -> None:
+    snapshot = CrawlSnapshot(
+        generated_at="2026-04-05T00:00:00+00:00",
+        target_url="https://example.com/",
+        base_url="https://example.com/",
+        probe=SiteProbe(
+            target_url="https://example.com/",
+            final_home_url="https://example.com/",
+            site_origin="https://example.com",
+            homepage_status_code=200,
+            homepage_title="Example Site",
+            probably_squarespace=True,
+        ),
+        pages=[
+            PageSnapshot(
+                requested_url="https://example.com/projects/barcelona",
+                final_url="https://example.com/projects/barcelona",
+                status_code=200,
+                content_type="text/html",
+                title="Barcelona Project",
+                meta_description=None,
+                canonical_url="https://example.com/projects/barcelona",
+                assets=[
+                    AssetReference(
+                        source_url="https://images.squarespace-cdn.com/content/project-image-asset.png",
+                        asset_type="image",
+                        attribute="src",
+                        owner_route="/projects/barcelona",
+                        group_key="img-1",
+                    ),
+                ],
+            ),
+            PageSnapshot(
+                requested_url="https://example.com/exhibitions/barcelona",
+                final_url="https://example.com/exhibitions/barcelona",
+                status_code=200,
+                content_type="text/html",
+                title="Barcelona Exhibition",
+                meta_description=None,
+                canonical_url="https://example.com/exhibitions/barcelona",
+                assets=[
+                    AssetReference(
+                        source_url="https://images.squarespace-cdn.com/content/exhibition-image-asset.png",
+                        asset_type="image",
+                        attribute="src",
+                        owner_route="/exhibitions/barcelona",
+                        group_key="img-1",
+                    ),
+                ],
+            ),
+        ],
+    )
+
+    responses = {
+        "https://images.squarespace-cdn.com/content/project-image-asset.png": httpx.Response(
+            200,
+            content=b"project-image",
+            headers={"content-type": "image/png"},
+        ),
+        "https://images.squarespace-cdn.com/content/exhibition-image-asset.png": httpx.Response(
+            200,
+            content=b"exhibition-image",
+            headers={"content-type": "image/png"},
+        ),
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        response = responses.get(str(request.url))
+        if response is None:
+            raise AssertionError(f"Unexpected request for {request.url}")
+        return response
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        manifest = download_snapshot_assets(client, snapshot, tmp_path)
+
+    assert [item.public_path for item in manifest.items] == [
+        "/assets/images/exhibitions-barcelona-1.png",
+        "/assets/images/projects-barcelona-1.png",
+    ]
 
 
 def test_estimate_snapshot_asset_download_uses_unique_squarespace_assets_and_tracks_unknown_sizes() -> None:

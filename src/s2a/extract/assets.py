@@ -6,7 +6,7 @@ import hashlib
 import mimetypes
 from pathlib import Path
 import re
-from typing import Callable
+from typing import Callable, Iterable
 from urllib.parse import parse_qsl, urlsplit
 
 import httpx
@@ -360,13 +360,38 @@ def download_snapshot_assets(
             progress_callback(index, total_assets, None)
 
     items: list[DownloadedAsset] = []
-    for group in group_downloaded_assets(resolved_assets):
-        representative = min(group, key=canonical_asset_sort_key)
+    grouped_assets = group_downloaded_assets(resolved_assets)
+    route_labels = build_route_label_lookup(
+        representative_for_group(group).asset.owner_route for group in grouped_assets
+    )
+    media_group_indices: dict[str, dict[str, int]] = {}
+    file_group_indices: dict[str, dict[str, int]] = {}
+    used_relative_paths: set[str] = set()
+
+    for group in sorted(grouped_assets, key=download_group_sort_key):
+        representative = representative_for_group(group)
         canonical_id = representative.sha256
-        filename = build_download_filename(
-            representative.asset,
-            representative.extension,
-            canonical_id[:12],
+        route_label = route_labels.get(
+            representative.asset.owner_route,
+            slugify_fragment(representative.asset.owner_route.strip("/") or "home"),
+        )
+        if representative.asset.asset_type == "file":
+            sequence = route_group_sequence(
+                file_group_indices, route_label, representative.asset.group_key)
+        else:
+            sequence = route_group_sequence(
+                media_group_indices, route_label, representative.asset.group_key)
+
+        filename = uniquify_download_filename(
+            representative.asset_subdir,
+            build_download_filename(
+                representative.asset,
+                representative.extension,
+                route_label,
+                sequence,
+            ),
+            used_relative_paths,
+            disambiguators=filename_collision_disambiguators(representative),
         )
         local_relative_path = Path("downloaded-assets") / representative.asset_subdir / filename
         public_relative_path = Path("assets") / representative.asset_subdir / filename
@@ -612,13 +637,28 @@ def group_downloaded_assets(
     return list(groups.values())
 
 
+def representative_for_group(group: list[ResolvedAssetDownload]) -> ResolvedAssetDownload:
+    return min(group, key=canonical_asset_sort_key)
+
+
+def download_group_sort_key(group: list[ResolvedAssetDownload]) -> tuple[tuple[str, ...], tuple[str, int, str], int, str, str]:
+    representative = representative_for_group(group)
+    return (
+        route_sort_key(representative.asset.owner_route),
+        asset_group_sort_key(representative.asset.group_key),
+        asset_variant_sort_key(representative.asset.variant_hint),
+        representative.asset.asset_type,
+        representative.final_url or representative.asset.source_url,
+    )
+
+
 def canonical_asset_sort_key(resolved: ResolvedAssetDownload) -> tuple[bool, str, str, str, str, str, str]:
     descriptor = asset_descriptor_stem(resolved.asset)
     variant = canonical_variant_hint(resolved.asset)
     route = slugify_fragment(resolved.asset.owner_route.strip("/") or "home")
     url_identity = resolved.final_url or resolved.asset.source_url
     return (
-        descriptor in GENERIC_DESCRIPTOR_STEMS,
+        is_generic_descriptor_stem(descriptor),
         descriptor,
         variant,
         route,
@@ -628,15 +668,78 @@ def canonical_asset_sort_key(resolved: ResolvedAssetDownload) -> tuple[bool, str
     )
 
 
-def build_download_filename(asset: AssetReference, extension: str, canonical_suffix: str) -> str:
-    stem = asset_descriptor_stem(asset)
+def build_download_filename(asset: AssetReference, extension: str, route_label: str, sequence: int) -> str:
+    if asset.asset_type == "file":
+        stem = asset_descriptor_stem(asset)
+        if is_generic_descriptor_stem(stem):
+            stem = f"{route_label}-file-{sequence}"
+        return f"{stem}{extension}"
+
+    stem = f"{route_label}-{sequence}"
     variant = canonical_variant_hint(asset)
 
-    if asset.asset_type != "file" and variant not in {"", "file", "original"}:
-        if stem != variant and not stem.endswith(f"-{variant}"):
-            stem = f"{stem}-{variant}"
+    if variant not in {"", "file", "original"}:
+        stem = f"{stem}-{variant}"
 
-    return f"{stem}-{canonical_suffix}{extension}"
+    return f"{stem}{extension}"
+
+
+def uniquify_download_filename(
+    asset_subdir: str,
+    filename: str,
+    used_relative_paths: set[str],
+    *,
+    disambiguators: Iterable[str] = (),
+) -> str:
+    path_key = f"{asset_subdir}/{filename}"
+    if path_key not in used_relative_paths:
+        used_relative_paths.add(path_key)
+        return filename
+
+    path = Path(filename)
+    stem = path.stem
+    suffix = path.suffix
+
+    for disambiguator in normalized_collision_disambiguators(disambiguators):
+        if stem.endswith(f"-{disambiguator}"):
+            continue
+        candidate = f"{stem}-{disambiguator}{suffix}"
+        candidate_key = f"{asset_subdir}/{candidate}"
+        if candidate_key not in used_relative_paths:
+            used_relative_paths.add(candidate_key)
+            return candidate
+
+    index = 2
+    while True:
+        candidate = f"{stem}-{index}{suffix}"
+        candidate_key = f"{asset_subdir}/{candidate}"
+        if candidate_key not in used_relative_paths:
+            used_relative_paths.add(candidate_key)
+            return candidate
+        index += 1
+
+
+def normalized_collision_disambiguators(values: Iterable[str]) -> list[str]:
+    normalized: list[str] = []
+    for value in values:
+        slug = slugify_fragment(value)
+        if slug and slug not in normalized:
+            normalized.append(slug)
+    return normalized
+
+
+def filename_collision_disambiguators(resolved: ResolvedAssetDownload) -> list[str]:
+    disambiguators: list[str] = []
+    for candidate_url in (resolved.final_url, resolved.asset.source_url):
+        token = variant_width_token_from_url(candidate_url)
+        if token and token not in disambiguators:
+            disambiguators.append(token)
+
+    descriptor = asset_descriptor_stem(resolved.asset)
+    if descriptor and not is_generic_descriptor_stem(descriptor) and descriptor not in disambiguators:
+        disambiguators.append(descriptor)
+
+    return disambiguators
 
 
 def canonical_variant_hint(asset: AssetReference) -> str:
@@ -679,6 +782,91 @@ def asset_descriptor_stem(asset: AssetReference) -> str:
     return slugify_fragment(asset.asset_type or "asset")
 
 
+def is_generic_descriptor_stem(value: str) -> bool:
+    parts = [part for part in re.split(r"[-_]+", value.lower()) if part]
+    if not parts:
+        return True
+
+    textual_parts = [part for part in parts if not part.isdigit()]
+    if not textual_parts:
+        return True
+
+    return all(part in GENERIC_DESCRIPTOR_STEMS for part in textual_parts)
+
+
+def build_route_label_lookup(owner_routes: Iterable[str]) -> dict[str, str]:
+    unique_routes = sorted(set(owner_routes), key=route_sort_key)
+    if not unique_routes:
+        return {}
+
+    segment_lookup = {route: route_label_segments(route) for route in unique_routes}
+    suffix_widths = {route: 1 for route in unique_routes}
+
+    while True:
+        labels = {
+            route: "-".join(segment_lookup[route][-suffix_widths[route]:])
+            for route in unique_routes
+        }
+        collisions: dict[str, list[str]] = {}
+        for route, label in labels.items():
+            collisions.setdefault(label, []).append(route)
+
+        changed = False
+        for routes in collisions.values():
+            if len(routes) < 2:
+                continue
+            expandable = [route for route in routes if suffix_widths[route]
+                          < len(segment_lookup[route])]
+            if not expandable:
+                continue
+            for route in expandable:
+                suffix_widths[route] += 1
+                changed = True
+
+        if not changed:
+            return labels
+
+
+def route_label_segments(owner_route: str) -> list[str]:
+    segments = [slugify_fragment(part)
+                for part in owner_route.strip("/").split("/") if part.strip()]
+    return segments or ["home"]
+
+
+def route_sort_key(owner_route: str) -> tuple[str, ...]:
+    return tuple(route_label_segments(owner_route))
+
+
+def route_group_sequence(
+    route_group_indices: dict[str, dict[str, int]],
+    route_label: str,
+    group_key: str,
+) -> int:
+    route_map = route_group_indices.setdefault(route_label, {})
+    if group_key not in route_map:
+        route_map[group_key] = len(route_map) + 1
+    return route_map[group_key]
+
+
+def asset_group_sort_key(group_key: str) -> tuple[str, int, str]:
+    prefix, separator, suffix = group_key.partition("-")
+    if separator and suffix.isdigit():
+        return prefix, int(suffix), group_key
+    return prefix, 0, group_key
+
+
+def asset_variant_sort_key(variant_hint: str | None) -> int:
+    variant = slugify_fragment(variant_hint or "original")
+    order = {
+        "original": 0,
+        "poster": 1,
+        "small": 2,
+        "medium": 3,
+        "large": 4,
+    }
+    return order.get(variant, 10)
+
+
 def extension_for_asset(url: str, content_type: str | None) -> str:
     lowered_content_type = (content_type or "").split(";", 1)[0].strip().lower()
     if lowered_content_type in EXTENSION_OVERRIDES:
@@ -715,6 +903,36 @@ def filename_stem_from_url(url: str) -> str:
     if path.stem:
         return path.stem
     return "asset"
+
+
+def variant_width_token_from_url(url: str | None) -> str | None:
+    if not url:
+        return None
+
+    query = dict(parse_qsl(urlsplit(url).query, keep_blank_values=True))
+    for key in ("format", "w", "width", "h", "height"):
+        token = dimension_token(query.get(key))
+        if token:
+            return token
+
+    return None
+
+
+def dimension_token(value: str | None) -> str | None:
+    if not value:
+        return None
+
+    stripped = value.strip().lower()
+    if not stripped:
+        return None
+    if stripped.isdigit():
+        return f"{stripped}w"
+
+    match = re.fullmatch(r"(\d+)(w|h|x)", stripped)
+    if match:
+        return f"{match.group(1)}{match.group(2)}"
+
+    return None
 
 
 def infer_variant_hint(
