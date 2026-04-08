@@ -2707,7 +2707,8 @@ def classic_embed_block_html(block: Tag) -> str:
         if data_html:
             iframe_html = unescape(data_html)
 
-    iframe_fragment = BeautifulSoup(iframe_html, "html.parser") if iframe_html else BeautifulSoup("", "html.parser")
+    iframe_fragment = BeautifulSoup(
+        iframe_html, "html.parser") if iframe_html else BeautifulSoup("", "html.parser")
     rebuilt_iframe = iframe_fragment.find("iframe")
     if rebuilt_iframe is not None:
         src = normalize_protocol_relative_url(rebuilt_iframe.get("src"))
@@ -2716,7 +2717,8 @@ def classic_embed_block_html(block: Tag) -> str:
         rebuilt_iframe.attrs.pop("srcdoc", None)
         wrapper.append(rebuilt_iframe)
     else:
-        thumbnail_url = normalize_protocol_relative_url(payload.get("thumbnailUrl") if payload else None)
+        thumbnail_url = normalize_protocol_relative_url(
+            payload.get("thumbnailUrl") if payload else None)
         if thumbnail_url:
             thumbnail = rebuilt.new_tag("img", src=thumbnail_url)
             thumbnail["alt"] = payload.get("providerName") or "Embedded media preview"
