@@ -3,8 +3,9 @@ from pathlib import Path
 import httpx
 from bs4 import BeautifulSoup
 
-from s2a.extract.assets import download_snapshot_assets, estimate_snapshot_asset_download, extract_asset_references
-from s2a.normalize.models import AssetReference, CrawlSnapshot, PageSnapshot, SiteProbe
+from s2a.extract.assets import download_snapshot_assets, estimate_snapshot_asset_download, extract_asset_references, upgrade_legacy_asset_manifest
+from s2a.files import read_json, write_json
+from s2a.normalize.models import AssetManifest, AssetReference, CrawlSnapshot, DownloadedAsset, PageSnapshot, SiteProbe
 
 
 def test_extract_asset_references_discovers_media_files_and_backgrounds() -> None:
@@ -511,6 +512,76 @@ def test_download_snapshot_assets_expands_route_labels_when_page_suffixes_collid
         "/assets/images/exhibitions-barcelona-1.png",
         "/assets/images/projects-barcelona-1.png",
     ]
+
+
+def test_upgrade_legacy_asset_manifest_renames_hashed_assets_and_merges_duplicates(tmp_path: Path) -> None:
+    first_relative_path = "downloaded-assets/images/still-tom-cc-large-db0f0226d1de.webp"
+    duplicate_relative_path = "downloaded-assets/images/be-water-large-db0f0226d1de.webp"
+    first_file = tmp_path / first_relative_path
+    duplicate_file = tmp_path / duplicate_relative_path
+    first_file.parent.mkdir(parents=True, exist_ok=True)
+    first_file.write_bytes(b"shared-image")
+    duplicate_file.write_bytes(b"shared-image")
+
+    legacy_manifest = AssetManifest(
+        generated_at="2026-04-05T00:00:00+00:00",
+        items=[
+            DownloadedAsset(
+                source_url="https://images.squarespace-cdn.com/content/still-tom-cc.png?format=1000w",
+                final_url="https://images.squarespace-cdn.com/content/still-tom-cc.png?format=1000w",
+                asset_type="image",
+                owner_route="/projects/be-water",
+                group_key="img-7",
+                filename="still-tom-cc-large-db0f0226d1de.webp",
+                local_path=first_relative_path,
+                public_path="/assets/images/still-tom-cc-large-db0f0226d1de.webp",
+                canonical_id="db0f0226d1de1111111111111111111111111111111111111111111111111111",
+                sha256="db0f0226d1de1111111111111111111111111111111111111111111111111111",
+                variant_hint="large",
+                deduplicated_from_count=1,
+            ),
+            DownloadedAsset(
+                source_url="https://images.squarespace-cdn.com/content/be-water-duplicate.png?format=1000w",
+                final_url="https://images.squarespace-cdn.com/content/be-water-duplicate.png?format=1000w",
+                asset_type="image",
+                owner_route="/projects/be-water",
+                group_key="img-8",
+                filename="be-water-large-db0f0226d1de.webp",
+                local_path=duplicate_relative_path,
+                public_path="/assets/images/be-water-large-db0f0226d1de.webp",
+                canonical_id="db0f0226d1de1111111111111111111111111111111111111111111111111111",
+                sha256="db0f0226d1de1111111111111111111111111111111111111111111111111111",
+                variant_hint="large",
+                deduplicated_from_count=1,
+            ),
+        ],
+    )
+    write_json(tmp_path / "asset_manifest.json", legacy_manifest)
+
+    upgraded_manifest, warnings, upgraded = upgrade_legacy_asset_manifest(
+        tmp_path,
+        read_json(tmp_path / "asset_manifest.json"),
+    )
+
+    assert upgraded is True
+    assert warnings == [
+        "Upgraded legacy asset_manifest.json filenames from hash-suffixed paths to the current route-based naming scheme."
+    ]
+    assert upgraded_manifest["warnings"] == []
+    assert [item["public_path"] for item in upgraded_manifest["items"]] == [
+        "/assets/images/be-water-1-large.webp",
+    ]
+    assert upgraded_manifest["items"][0]["deduplicated_from_count"] == 2
+    assert {
+        upgraded_manifest["items"][0]["source_url"],
+        *upgraded_manifest["items"][0]["alias_source_urls"],
+    } == {
+        "https://images.squarespace-cdn.com/content/still-tom-cc.png?format=1000w",
+        "https://images.squarespace-cdn.com/content/be-water-duplicate.png?format=1000w",
+    }
+    assert (tmp_path / "downloaded-assets/images/be-water-1-large.webp").read_bytes() == b"shared-image"
+    assert not first_file.exists()
+    assert not duplicate_file.exists()
 
 
 def test_estimate_snapshot_asset_download_uses_unique_squarespace_assets_and_tracks_unknown_sizes() -> None:

@@ -10,7 +10,7 @@ from typing import Any, Sequence
 from urllib.parse import urlsplit
 
 from s2a import __version__
-from s2a.extract.assets import AssetDownloadEstimate, download_snapshot_assets, estimate_snapshot_asset_download
+from s2a.extract.assets import AssetDownloadEstimate, AssetManifestUpgradeError, download_snapshot_assets, estimate_snapshot_asset_download
 from s2a.extract.auth import apply_storage_state_cookies, capture_storage_state
 from s2a.extract.crawl import crawl_site
 from s2a.extract.xml_import import import_wordpress_xml
@@ -434,17 +434,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             xml_export_path=args.xml_export,
             work_dir=output_dir,
         )
-        result = generate_astro_project(
-            snapshot_path=Path(args.snapshot),
-            output_dir=output_dir,
-            xml_import_path=xml_input_path,
-            site_url=args.site,
-            base_path=args.base,
-            project_name=args.project_name,
-            fidelity_mode=fidelity_mode,
-            layout_strategy=layout_strategy,
-            markdown_first=markdown_first,
-        )
+        try:
+            result = generate_astro_project(
+                snapshot_path=Path(args.snapshot),
+                output_dir=output_dir,
+                xml_import_path=xml_input_path,
+                site_url=args.site,
+                base_path=args.base,
+                project_name=args.project_name,
+                fidelity_mode=fidelity_mode,
+                layout_strategy=layout_strategy,
+                markdown_first=markdown_first,
+            )
+        except AssetManifestUpgradeError as exc:
+            console.emit(str(exc), always=True)
+            return 1
         write_json(output_dir / "astro_generation.json", result)
         write_execution_metadata(
             output_dir,
@@ -585,17 +589,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.fidelity_mode = fidelity_mode
             args.layout_strategy = layout_strategy
             args.markdown_first = markdown_first
-            astro_result = generate_astro_project(
-                snapshot_path=output_dir / "site_snapshot.json",
-                output_dir=astro_dir,
-                xml_import_path=xml_import_path,
-                site_url=args.site,
-                base_path=args.base,
-                project_name=args.project_name,
-                fidelity_mode=fidelity_mode,
-                layout_strategy=layout_strategy,
-                markdown_first=markdown_first,
-            )
+            try:
+                astro_result = generate_astro_project(
+                    snapshot_path=output_dir / "site_snapshot.json",
+                    output_dir=astro_dir,
+                    xml_import_path=xml_import_path,
+                    site_url=args.site,
+                    base_path=args.base,
+                    project_name=args.project_name,
+                    fidelity_mode=fidelity_mode,
+                    layout_strategy=layout_strategy,
+                    markdown_first=markdown_first,
+                )
+            except AssetManifestUpgradeError as exc:
+                console.emit(str(exc), always=True)
+                return 1
             write_json(output_dir / "astro_generation.json", astro_result)
             write_execution_metadata(
                 output_dir,
@@ -940,6 +948,8 @@ def print_astro_summary(console: Console, output_dir: Path, result) -> None:
         f"Generated Astro project at {output_dir} | pages={result.pages_written} | posts={result.posts_written} | "
         f"manifest={result.manifest_path} | metadata={output_dir / EXECUTION_METADATA_FILE}"
     )
+    for warning in result.warnings:
+        console.emit(f"Warning: {warning}")
 
 
 def print_migrate_summary(console: Console, output_dir: Path, report, astro_dir: Path, result, asset_manifest: AssetManifest) -> None:
@@ -948,6 +958,8 @@ def print_migrate_summary(console: Console, output_dir: Path, report, astro_dir:
         f"astro_pages={result.pages_written} | astro_posts={result.posts_written} | astro_dir={astro_dir} | "
         f"metadata={output_dir / EXECUTION_METADATA_FILE}"
     )
+    for warning in result.warnings:
+        console.emit(f"Warning: {warning}")
 
 
 def print_migrate_cancelled_summary(console: Console, output_dir: Path, report) -> None:

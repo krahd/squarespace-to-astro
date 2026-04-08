@@ -70,6 +70,12 @@ GENERIC_DESCRIPTOR_STEMS = {
     "photo",
     "video",
 }
+LEGACY_HASH_SUFFIX_PATTERN = re.compile(
+    r"^(?P<stem>.+)-(?P<hash>[0-9a-f]{12})(?P<extension>\.[a-z0-9]+)$"
+)
+LEGACY_MANIFEST_UPGRADE_WARNING = (
+    "Upgraded legacy asset_manifest.json filenames from hash-suffixed paths to the current route-based naming scheme."
+)
 
 ProgressCallback = Callable[[int, int, str | None], None]
 
@@ -96,6 +102,18 @@ class ResolvedAssetDownload:
     size_bytes: int
     sha256: str
     content: bytes
+
+
+class AssetManifestUpgradeError(RuntimeError):
+    pass
+
+
+@dataclass(slots=True)
+class ManifestAssetEntry:
+    item: dict
+    resolved: ResolvedAssetDownload
+    local_relative_path: Path
+    legacy_hashed_filename: bool
 
 
 def extract_asset_references(soup: BeautifulSoup, base_url: str, owner_route: str) -> list[AssetReference]:
@@ -436,6 +454,141 @@ def download_snapshot_assets(
     )
 
 
+def upgrade_legacy_asset_manifest(snapshot_root: Path, asset_manifest: dict) -> tuple[dict, list[str], bool]:
+    items = asset_manifest.get("items")
+    cleaned_warnings = [
+        warning
+        for warning in asset_manifest.get("warnings", [])
+        if warning != LEGACY_MANIFEST_UPGRADE_WARNING
+    ]
+    if not isinstance(items, list) or not items:
+        if cleaned_warnings == list(asset_manifest.get("warnings", [])):
+            return asset_manifest, [], False
+        cleaned_manifest = dict(asset_manifest)
+        cleaned_manifest["warnings"] = cleaned_warnings
+        return cleaned_manifest, [], True
+
+    entries = [manifest_asset_entry(item) for item in items]
+    if not any(entry.legacy_hashed_filename for entry in entries):
+        if cleaned_warnings == list(asset_manifest.get("warnings", [])):
+            return asset_manifest, [], False
+        cleaned_manifest = dict(asset_manifest)
+        cleaned_manifest["warnings"] = cleaned_warnings
+        return cleaned_manifest, [], True
+
+    grouped_entries = group_manifest_asset_entries(entries)
+    route_labels = build_route_label_lookup(
+        representative_for_group([entry.resolved for entry in group]).asset.owner_route
+        for group in grouped_entries
+    )
+    media_group_indices: dict[str, dict[str, int]] = {}
+    file_group_indices: dict[str, dict[str, int]] = {}
+    used_relative_paths: set[str] = set()
+    upgraded_items: list[dict] = []
+
+    for group in sorted(grouped_entries, key=manifest_group_sort_key):
+        resolved_group = [entry.resolved for entry in group]
+        representative = representative_for_group(resolved_group)
+        representative_entry = next(
+            entry for entry in group if entry.resolved is representative
+        )
+        route_label = route_labels.get(
+            representative.asset.owner_route,
+            slugify_fragment(representative.asset.owner_route.strip("/") or "home"),
+        )
+        route_group_indices = (
+            file_group_indices
+            if representative.asset.asset_type == "file"
+            else media_group_indices
+        )
+        sequence = route_group_sequence(
+            route_group_indices,
+            route_label,
+            representative.asset.group_key,
+        )
+        filename = uniquify_download_filename(
+            representative.asset_subdir,
+            build_download_filename(
+                representative.asset,
+                representative.extension,
+                route_label,
+                sequence,
+            ),
+            used_relative_paths,
+            disambiguators=filename_collision_disambiguators(representative),
+        )
+        local_relative_path = Path("downloaded-assets") / representative.asset_subdir / filename
+        public_path = f"/assets/{representative.asset_subdir}/{filename}"
+
+        old_relative_paths = [entry.local_relative_path for entry in group]
+        source_path = choose_existing_manifest_asset_path(
+            snapshot_root,
+            old_relative_paths,
+            public_path=public_path,
+        )
+        target_path = snapshot_root / local_relative_path
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        move_manifest_asset_file(
+            source_path,
+            target_path,
+            expected_sha256=representative.sha256,
+            public_path=public_path,
+        )
+        cleanup_duplicate_manifest_asset_files(snapshot_root, old_relative_paths, target_path)
+
+        merged_item = dict(representative_entry.item)
+        source_urls = sorted(
+            {
+                url
+                for entry in group
+                for url in [
+                    str(entry.item.get("source_url") or ""),
+                    *[str(value) for value in entry.item.get("alias_source_urls", []) if value],
+                ]
+                if url
+            }
+        )
+        final_urls = sorted(
+            {
+                url
+                for entry in group
+                for url in [
+                    str(entry.item.get("final_url") or entry.item.get("source_url") or ""),
+                    *[str(value) for value in entry.item.get("alias_final_urls", []) if value],
+                ]
+                if url
+            }
+        )
+        merged_item.update(
+            filename=filename,
+            local_path=local_relative_path.as_posix(),
+            public_path=public_path,
+            source_url=representative.asset.source_url,
+            final_url=representative.final_url,
+            alias_source_urls=[url for url in source_urls if url !=
+                               representative.asset.source_url],
+            alias_final_urls=[url for url in final_urls if url != representative.final_url],
+            deduplicated_from_count=sum(manifest_item_source_count(entry.item) for entry in group),
+            canonical_id=representative.sha256,
+            sha256=representative.sha256,
+        )
+        upgraded_items.append(merged_item)
+
+    upgraded_items.sort(key=lambda item: (
+        str(item.get("public_path") or ""), str(item.get("source_url") or "")))
+    source_asset_count = sum(manifest_item_source_count(item) for item in upgraded_items)
+    upgraded_manifest = dict(asset_manifest)
+    upgraded_manifest.update(
+        generated_at=datetime.now(UTC).isoformat(),
+        items=upgraded_items,
+        source_asset_count=source_asset_count,
+        deduplicated_asset_count=max(0, source_asset_count - len(upgraded_items)),
+        warnings=cleaned_warnings,
+    )
+
+    return upgraded_manifest, [LEGACY_MANIFEST_UPGRADE_WARNING], True
+
+
 def estimate_asset_size_bytes(client: httpx.Client, source_url: str) -> tuple[int | None, str | None]:
     last_error: str | None = None
 
@@ -635,6 +788,201 @@ def group_downloaded_assets(
         groups.setdefault(key, []).append(resolved)
 
     return list(groups.values())
+
+
+def manifest_asset_entry(item: dict) -> ManifestAssetEntry:
+    asset_type = str(item.get("asset_type") or "asset")
+    source_url = str(item.get("source_url") or "")
+    final_url = str(item.get("final_url") or source_url)
+    content_type = item.get("content_type")
+    filename = manifest_item_filename(item)
+    local_relative_path = manifest_item_local_relative_path(item, filename)
+    asset_subdir = manifest_item_subdir(item, local_relative_path)
+    extension = manifest_item_extension(item, filename, content_type, source_url)
+    attribute = manifest_item_attribute(item, asset_type)
+    owner_route = str(item.get("owner_route") or "/")
+    group_key = str(item.get("group_key") or f"{asset_type}-1")
+    sha256 = str(item.get("sha256") or item.get("canonical_id") or "")
+    size_bytes = int(item.get("size_bytes") or 0)
+
+    asset = AssetReference(
+        source_url=source_url,
+        asset_type=asset_type,
+        attribute=attribute,
+        owner_route=owner_route,
+        group_key=group_key,
+        alt_text=empty_to_none(item.get("alt_text")),
+        caption=empty_to_none(item.get("caption")),
+        link_text=empty_to_none(item.get("link_text")),
+        variant_hint=empty_to_none(item.get("variant_hint")) or "original",
+    )
+    resolved = ResolvedAssetDownload(
+        asset=asset,
+        final_url=final_url,
+        asset_subdir=asset_subdir,
+        extension=extension,
+        content_type=str(content_type) if content_type else None,
+        size_bytes=size_bytes,
+        sha256=sha256,
+        content=b"",
+    )
+    return ManifestAssetEntry(
+        item=item,
+        resolved=resolved,
+        local_relative_path=local_relative_path,
+        legacy_hashed_filename=is_legacy_manifest_filename(item, filename),
+    )
+
+
+def empty_to_none(value: object) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def manifest_item_filename(item: dict) -> str:
+    filename = empty_to_none(item.get("filename"))
+    if filename:
+        return filename
+
+    local_path = empty_to_none(item.get("local_path"))
+    if local_path:
+        return Path(local_path).name
+
+    public_path = empty_to_none(item.get("public_path"))
+    if public_path:
+        return Path(public_path).name
+
+    source_url = str(item.get("source_url") or "")
+    content_type = str(item.get("content_type") or "") or None
+    return f"asset{extension_for_asset(source_url, content_type)}"
+
+
+def manifest_item_local_relative_path(item: dict, filename: str) -> Path:
+    local_path = empty_to_none(item.get("local_path"))
+    if local_path:
+        return Path(local_path)
+
+    asset_subdir = manifest_item_subdir(item, None)
+    return Path("downloaded-assets") / asset_subdir / filename
+
+
+def manifest_item_subdir(item: dict, local_relative_path: Path | None) -> str:
+    if local_relative_path is not None:
+        parts = local_relative_path.parts
+        if len(parts) >= 3 and parts[0] == "downloaded-assets":
+            return parts[1]
+
+    public_path = empty_to_none(item.get("public_path"))
+    if public_path:
+        parts = Path(public_path.lstrip("/")).parts
+        if len(parts) >= 3 and parts[0] == "assets":
+            return parts[1]
+
+    return asset_subdirectory(str(item.get("asset_type") or "asset"))
+
+
+def manifest_item_extension(_item: dict, filename: str, content_type: str | None, source_url: str) -> str:
+    extension = Path(filename).suffix
+    if extension:
+        return normalize_extension(extension)
+    return extension_for_asset(source_url, content_type)
+
+
+def manifest_item_attribute(item: dict, asset_type: str) -> str:
+    variant = slugify_fragment(str(item.get("variant_hint") or "original"))
+    if variant == "poster":
+        return "poster"
+    if asset_type == "file":
+        return "href"
+    return "src"
+
+
+def is_legacy_manifest_filename(item: dict, filename: str) -> bool:
+    match = LEGACY_HASH_SUFFIX_PATTERN.fullmatch(filename)
+    if match is None:
+        return False
+
+    canonical_hash = str(item.get("canonical_id") or item.get("sha256") or "")
+    return bool(canonical_hash) and canonical_hash.startswith(match.group("hash"))
+
+
+def group_manifest_asset_entries(entries: list[ManifestAssetEntry]) -> list[list[ManifestAssetEntry]]:
+    groups: dict[tuple[str, str], list[ManifestAssetEntry]] = {}
+    for entry in entries:
+        sha256 = entry.resolved.sha256 or entry.item.get(
+            "canonical_id") or entry.local_relative_path.as_posix()
+        key = (entry.resolved.asset_subdir, str(sha256))
+        groups.setdefault(key, []).append(entry)
+    return list(groups.values())
+
+
+def manifest_group_sort_key(group: list[ManifestAssetEntry]) -> tuple[tuple[str, ...], tuple[str, int, str], int, str, str]:
+    return download_group_sort_key([entry.resolved for entry in group])
+
+
+def manifest_item_source_count(item: dict) -> int:
+    value = item.get("deduplicated_from_count")
+    if isinstance(value, int) and value > 0:
+        return value
+    if isinstance(value, str) and value.isdigit() and int(value) > 0:
+        return int(value)
+    return 1
+
+
+def choose_existing_manifest_asset_path(
+    snapshot_root: Path,
+    local_relative_paths: list[Path],
+    *,
+    public_path: str,
+) -> Path:
+    for relative_path in local_relative_paths:
+        candidate = snapshot_root / relative_path
+        if candidate.exists():
+            return candidate
+
+    raise AssetManifestUpgradeError(
+        f"Cannot upgrade legacy asset manifest for {public_path}: none of the expected localized files exist under {snapshot_root / 'downloaded-assets'}. Rerun crawl or migrate to rebuild localized assets."
+    )
+
+
+def move_manifest_asset_file(
+    source_path: Path,
+    target_path: Path,
+    *,
+    expected_sha256: str,
+    public_path: str,
+) -> None:
+    if source_path == target_path:
+        return
+
+    if target_path.exists():
+        if expected_sha256 and file_sha256(target_path) != expected_sha256:
+            raise AssetManifestUpgradeError(
+                f"Cannot upgrade legacy asset manifest for {public_path}: target path {target_path} already exists with different content."
+            )
+        source_path.unlink(missing_ok=True)
+        return
+
+    source_path.replace(target_path)
+
+
+def cleanup_duplicate_manifest_asset_files(snapshot_root: Path, local_relative_paths: list[Path], target_path: Path) -> None:
+    for relative_path in local_relative_paths:
+        candidate = snapshot_root / relative_path
+        if candidate == target_path:
+            continue
+        if candidate.exists():
+            candidate.unlink()
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(65536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def representative_for_group(group: list[ResolvedAssetDownload]) -> ResolvedAssetDownload:

@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup, Tag
 from markdownify import markdownify
 import yaml
 
+from s2a.extract.assets import upgrade_legacy_asset_manifest
 from s2a.files import read_json, write_json, write_text
 from s2a.normalize.models import (
     AstroGenerationResult,
@@ -93,6 +94,14 @@ def generate_astro_project(
     xml_import = read_json(xml_import_path) if xml_import_path else None
     asset_manifest_path = snapshot_path.parent / "asset_manifest.json"
     asset_manifest = read_json(asset_manifest_path) if asset_manifest_path.exists() else None
+    upgrade_warnings: list[str] = []
+    if asset_manifest is not None:
+        asset_manifest, upgrade_warnings, upgraded = upgrade_legacy_asset_manifest(
+            snapshot_path.parent,
+            asset_manifest,
+        )
+        if upgraded:
+            write_json(asset_manifest_path, asset_manifest)
 
     manifest = build_astro_manifest(
         snapshot,
@@ -105,6 +114,8 @@ def generate_astro_project(
     )
     if site_url:
         manifest.base_url = site_url.rstrip("/")
+    if upgrade_warnings:
+        manifest.warnings = unique_warnings([*upgrade_warnings, *manifest.warnings])
 
     write_project(
         output_dir,
@@ -124,6 +135,14 @@ def generate_astro_project(
         posts_written=len(manifest.posts),
         warnings=manifest.warnings,
     )
+
+
+def unique_warnings(values: list[str]) -> list[str]:
+    unique: list[str] = []
+    for value in values:
+        if value not in unique:
+            unique.append(value)
+    return unique
 
 
 def build_astro_manifest(

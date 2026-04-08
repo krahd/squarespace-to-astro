@@ -1120,3 +1120,94 @@ def test_generate_astro_project_rewrites_alias_urls_to_one_canonical_asset(tmp_p
     assert "/assets/images/home-1.jpg" in gallery_content
     assert (output_dir / "public/assets/images/home-1.jpg").read_bytes() == shared_bytes
     assert len(list((output_dir / "public/assets/images").iterdir())) == 1
+
+
+def test_generate_astro_project_upgrades_legacy_asset_manifest_paths(tmp_path: Path) -> None:
+    snapshot_dir = tmp_path / "snapshot"
+    raw_html_dir = snapshot_dir / "raw-html"
+    raw_html_dir.mkdir(parents=True)
+
+    legacy_relative_path = "downloaded-assets/images/still-tom-cc-large-db0f0226d1de.webp"
+    legacy_file = snapshot_dir / legacy_relative_path
+    legacy_file.parent.mkdir(parents=True, exist_ok=True)
+    legacy_file.write_bytes(b"legacy-image")
+
+    write_text(
+        raw_html_dir / "projects__be-water.html",
+        "<html><body><main><img src=\"https://images.squarespace-cdn.com/content/still-tom-cc.png?format=1000w\" alt=\"\" /></main></body></html>",
+    )
+
+    write_json(
+        snapshot_dir / "asset_manifest.json",
+        AssetManifest(
+            generated_at="2026-04-05T00:00:00+00:00",
+            items=[
+                DownloadedAsset(
+                    source_url="https://images.squarespace-cdn.com/content/still-tom-cc.png?format=1000w",
+                    final_url="https://images.squarespace-cdn.com/content/still-tom-cc.png?format=1000w",
+                    asset_type="image",
+                    owner_route="/projects/be-water",
+                    group_key="img-7",
+                    filename="still-tom-cc-large-db0f0226d1de.webp",
+                    local_path=legacy_relative_path,
+                    public_path="/assets/images/still-tom-cc-large-db0f0226d1de.webp",
+                    canonical_id="db0f0226d1de1111111111111111111111111111111111111111111111111111",
+                    sha256="db0f0226d1de1111111111111111111111111111111111111111111111111111",
+                    variant_hint="large",
+                )
+            ],
+        ),
+    )
+
+    snapshot = CrawlSnapshot(
+        generated_at="2026-04-05T00:00:00+00:00",
+        target_url="https://example.com/",
+        base_url="https://example.com/",
+        probe=SiteProbe(
+            target_url="https://example.com/",
+            final_home_url="https://example.com/",
+            site_origin="https://example.com",
+            homepage_status_code=200,
+            homepage_title="Example Site",
+            probably_squarespace=True,
+            homepage_links=[
+                "https://example.com/",
+                "https://example.com/projects/be-water",
+            ],
+        ),
+        pages=[
+            PageSnapshot(
+                requested_url="https://example.com/projects/be-water",
+                final_url="https://example.com/projects/be-water",
+                status_code=200,
+                content_type="text/html",
+                title="Be Water — Example Site",
+                meta_description="Be Water description",
+                canonical_url="https://example.com/projects/be-water",
+                raw_html_path="raw-html/projects__be-water.html",
+            ),
+        ],
+    )
+    snapshot_path = snapshot_dir / "site_snapshot.json"
+    write_json(snapshot_path, snapshot)
+
+    output_dir = tmp_path / "astro-site"
+    result = generate_astro_project(snapshot_path, output_dir, site_url="https://example.com")
+    content = (output_dir / "src/content/pages/projects--be-water.md").read_text(encoding="utf-8")
+    upgraded_manifest = read_json(snapshot_dir / "asset_manifest.json")
+
+    assert result.pages_written == 2
+    assert (
+        "Upgraded legacy asset_manifest.json filenames from hash-suffixed paths to the current route-based naming scheme."
+        in result.warnings
+    )
+    assert result.warnings.count(
+        "Upgraded legacy asset_manifest.json filenames from hash-suffixed paths to the current route-based naming scheme."
+    ) == 1
+    assert "/assets/images/be-water-1-large.webp" in content
+    assert "/assets/images/still-tom-cc-large-db0f0226d1de.webp" not in content
+    assert upgraded_manifest["items"][0]["public_path"] == "/assets/images/be-water-1-large.webp"
+    assert upgraded_manifest["items"][0]["local_path"] == "downloaded-assets/images/be-water-1-large.webp"
+    assert (snapshot_dir / "downloaded-assets/images/be-water-1-large.webp").read_bytes() == b"legacy-image"
+    assert not legacy_file.exists()
+    assert (output_dir / "public/assets/images/be-water-1-large.webp").read_bytes() == b"legacy-image"
