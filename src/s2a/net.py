@@ -4,9 +4,11 @@ from dataclasses import dataclass, field
 
 import httpx
 
+from s2a import __version__
+
 
 DEFAULT_HEADERS = {
-    "User-Agent": "squarespace-to-astro/0.1 (+https://github.com/)"
+    "User-Agent": f"squarespace-to-astro/{__version__} (+https://github.com/krahd/squarespace-to-astro)"
 }
 
 

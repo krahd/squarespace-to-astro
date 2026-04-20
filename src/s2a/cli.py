@@ -479,6 +479,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             insecure=args.insecure,
         )
         write_json(output_dir / "auth.json", report)
+        try:
+            (output_dir / "auth.json").chmod(0o600)
+            (output_dir / "auth").chmod(0o700)
+        except OSError:
+            pass
         write_execution_metadata(
             output_dir,
             args,
@@ -659,6 +664,11 @@ def prepare_storage_state(
         insecure=args.insecure,
     )
     write_json(output_dir / "auth.json", report)
+    try:
+        (output_dir / "auth.json").chmod(0o600)
+        (output_dir / "auth").chmod(0o700)
+    except OSError:
+        pass
     return output_dir / report.storage_state_path
 
 

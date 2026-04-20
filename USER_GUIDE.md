@@ -98,6 +98,10 @@ Behavior notes:
 - `--insecure` disables TLS certificate verification for both Playwright auth capture and later HTTP crawl requests. Use it only after confirming the URL is correct.
 - The automated browser-auth flow does not support interactive 2FA prompts.
 
+Security note:
+
+- `auth-browser` writes `storage_state.json` and `auth.json` into the run output. These files contain browser cookies and session state which should be treated as sensitive credentials. The CLI sets restrictive filesystem permissions on these files (`600` for files, `700` for the `auth` directory) when possible; avoid committing them to version control or sharing them publicly.
+
 If you want to capture a browser session first and reuse it later:
 
 ```bash

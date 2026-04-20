@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+import uuid
 import hashlib
 import mimetypes
 from pathlib import Path
@@ -11,6 +12,7 @@ from urllib.parse import parse_qsl, urlsplit
 
 import httpx
 from bs4 import BeautifulSoup, Tag
+import shutil
 
 from s2a.normalize.models import AssetManifest, AssetReference, CrawlSnapshot, DownloadedAsset
 from s2a.url_utils import make_absolute_url
@@ -101,7 +103,9 @@ class ResolvedAssetDownload:
     content_type: str | None
     size_bytes: int
     sha256: str
-    content: bytes
+    # Either `content` (in-memory) or `temp_path` (on-disk) will be populated.
+    content: bytes | None = None
+    temp_path: Path | None = None
 
 
 class AssetManifestUpgradeError(RuntimeError):
@@ -352,27 +356,43 @@ def download_snapshot_assets(
 
     for index, asset in enumerate(assets, start=1):
         try:
-            response = client.get(asset.source_url)
-            response.raise_for_status()
+            # Stream the response to avoid loading large files entirely into memory.
+            with client.stream("GET", asset.source_url) as response:
+                response.raise_for_status()
+                content_type = response.headers.get("content-type")
+                extension = extension_for_asset(str(response.url), content_type)
+                asset_subdir = asset_subdirectory(asset.asset_type)
+
+                # Stream into a temporary file while hashing to avoid buffering large files.
+                hasher = hashlib.sha256()
+                size_bytes = 0
+                tmp_dir = output_dir / "downloaded-assets" / ".tmp"
+                tmp_dir.mkdir(parents=True, exist_ok=True)
+                temp_name = f"asset-{index}-{uuid.uuid4().hex}.part"
+                temp_path = tmp_dir / temp_name
+                with temp_path.open("wb") as handle:
+                    for chunk in response.iter_bytes():
+                        if not chunk:
+                            continue
+                        handle.write(chunk)
+                        size_bytes += len(chunk)
+                        hasher.update(chunk)
+
+                resolved_assets.append(
+                    ResolvedAssetDownload(
+                        asset=asset,
+                        final_url=str(response.url),
+                        asset_subdir=asset_subdir,
+                        extension=extension,
+                        content_type=content_type,
+                        size_bytes=size_bytes,
+                        sha256=hasher.hexdigest(),
+                        content=None,
+                        temp_path=temp_path,
+                    )
+                )
         except httpx.HTTPError as exc:
             warnings.append(f"Failed to download asset {asset.source_url}: {exc}")
-        else:
-            content = response.content
-            content_type = response.headers.get("content-type")
-            extension = extension_for_asset(str(response.url), content_type)
-            asset_subdir = asset_subdirectory(asset.asset_type)
-            resolved_assets.append(
-                ResolvedAssetDownload(
-                    asset=asset,
-                    final_url=str(response.url),
-                    asset_subdir=asset_subdir,
-                    extension=extension,
-                    content_type=content_type,
-                    size_bytes=len(content),
-                    sha256=hashlib.sha256(content).hexdigest(),
-                    content=content,
-                )
-            )
 
         if progress_callback is not None:
             progress_callback(index, total_assets, None)
@@ -415,10 +435,40 @@ def download_snapshot_assets(
         public_relative_path = Path("assets") / representative.asset_subdir / filename
         full_path = output_dir / local_relative_path
         full_path.parent.mkdir(parents=True, exist_ok=True)
-        full_path.write_bytes(representative.content)
+        # Move the temporary file into place when available, otherwise write in-memory content.
+        try:
+            if representative.temp_path is not None and representative.temp_path.exists():
+                try:
+                    representative.temp_path.replace(full_path)
+                except OSError:
+                    shutil.copyfile(representative.temp_path, full_path)
+                    representative.temp_path.unlink(missing_ok=True)
+            else:
+                with full_path.open("wb") as handle:
+                    handle.write(representative.content or b"")
+        except OSError as exc:
+            warnings.append(f"Failed to write asset to {full_path}: {exc}")
 
         source_urls = sorted({entry.asset.source_url for entry in group})
         final_urls = sorted({entry.final_url for entry in group})
+        # Cleanup temporary files for non-representative group members.
+        for entry in group:
+            try:
+                temp = entry.temp_path
+                if temp and temp.exists() and (representative.temp_path is None or temp != representative.temp_path):
+                    temp.unlink(missing_ok=True)
+            except Exception:
+                # Best-effort cleanup; ignore errors.
+                pass
+        # Cleanup temporary files for non-representative group members.
+        for entry in group:
+            try:
+                temp = entry.temp_path
+                if temp and temp.exists() and (representative.temp_path is None or temp != representative.temp_path):
+                    temp.unlink(missing_ok=True)
+            except Exception:
+                # Best-effort cleanup; ignore errors.
+                pass
         item = DownloadedAsset(
             source_url=representative.asset.source_url,
             final_url=representative.final_url,

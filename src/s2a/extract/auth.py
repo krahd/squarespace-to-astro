@@ -5,6 +5,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import httpx
+import sys
 
 from s2a.files import read_json
 from s2a.normalize.models import AuthCaptureReport
@@ -46,6 +47,8 @@ def capture_storage_state(
     if manual and headless:
         headless = False
         warnings.append("Manual auth requires a visible browser, so headless mode was disabled.")
+    if manual and not sys.stdin.isatty():
+        raise RuntimeError("Manual auth requires an interactive terminal (tty).")
     if insecure:
         warnings.append("TLS certificate verification was disabled for browser auth capture.")
 
@@ -100,6 +103,13 @@ def capture_storage_state(
                     "Browser auth capture timed out waiting for a fully idle page, but storage state was still saved.")
 
             context.storage_state(path=str(storage_state_path))
+            try:
+                # Restrict storage_state.json and auth directory permissions to owner-only.
+                storage_state_path.chmod(0o600)
+                auth_dir.chmod(0o700)
+            except OSError:
+                # Non-fatal when filesystem doesn't support chmod semantics.
+                pass
         finally:
             browser.close()
 
