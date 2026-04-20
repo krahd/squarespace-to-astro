@@ -14,8 +14,13 @@ from s2a.extract.assets import AssetDownloadEstimate, AssetManifestUpgradeError,
 from s2a.extract.auth import apply_storage_state_cookies, capture_storage_state
 from s2a.extract.crawl import crawl_site
 from s2a.extract.xml_import import import_wordpress_xml
-from s2a.files import write_json
+from s2a.files import write_json, read_json
 from s2a.generate.astro import generate_astro_project as _generate_astro_project
+from s2a.generate.redirects import (
+    build_redirects_from_manifest,
+    write_redirects_json,
+    write_netlify_redirects,
+)
 from s2a.net import build_client
 from s2a.normalize.models import AssetManifest, AstroGenerationResult
 from s2a.normalize.transform import build_report
@@ -212,6 +217,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--project-name",
         help="Optional package name for the generated Astro project.",
     )
+    astro_parser.add_argument(
+        "--emit-redirects",
+        action="store_true",
+        help="Emit redirects.json and netlify/_redirects for the generated site.",
+    )
     add_fidelity_arguments(astro_parser)
 
     migrate_parser = subparsers.add_parser(
@@ -254,6 +264,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional package name for the generated Astro project.",
     )
     add_fidelity_arguments(migrate_parser)
+    migrate_parser.add_argument(
+        "--emit-redirects",
+        action="store_true",
+        help="Emit redirects.json and netlify/_redirects when generate-astro runs inside migrate.",
+    )
 
     return parser
 
@@ -450,6 +465,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             console.emit(str(exc), always=True)
             return 1
         write_json(output_dir / "astro_generation.json", result)
+        # Optionally emit redirects based on the generated migration manifest
+        if getattr(args, "emit_redirects", False):
+            try:
+                manifest = read_json(output_dir / "migration-manifest.json")
+                redirects = build_redirects_from_manifest(manifest)
+                write_redirects_json(output_dir, redirects)
+                write_netlify_redirects(output_dir, redirects)
+            except Exception:
+                # Non-fatal: redirect generation should not block normal output
+                pass
         write_execution_metadata(
             output_dir,
             args,
@@ -610,6 +635,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                 console.emit(str(exc), always=True)
                 return 1
             write_json(output_dir / "astro_generation.json", astro_result)
+            # Optionally emit redirects into the Astro output dir
+            if getattr(args, "emit_redirects", False):
+                try:
+                    manifest = read_json(astro_dir / "migration-manifest.json")
+                    redirects = build_redirects_from_manifest(manifest)
+                    write_redirects_json(astro_dir, redirects)
+                    write_netlify_redirects(astro_dir, redirects)
+                except Exception:
+                    pass
             write_execution_metadata(
                 output_dir,
                 args,
