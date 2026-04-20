@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project uses semantic versioning for tagged releases.
 
 ## [Unreleased]
+## [Unreleased]
+
+## [0.5.2] - 2026-04-20
+
+### Added in 0.5.2
+
+- Redirect generation: new module [src/s2a/generate/redirects.py](src/s2a/generate/redirects.py) and a CLI flag `--emit-redirects` to emit `redirects.json` and a Netlify `_redirects` file when running `generate-astro` or `migrate`.
+- Streaming asset downloads: assets are streamed to temporary files and hashed incrementally to avoid large in-memory buffers and to enable atomic finalization. See [src/s2a/extract/assets.py](src/s2a/extract/assets.py).
+- Continuous integration: added a GitHub Actions workflow to run tests and install Playwright browsers in CI (see [.github/workflows/ci.yml](.github/workflows/ci.yml)).
+- Tests: added [tests/test_redirects.py](tests/test_redirects.py) covering redirect generation.
+
+### Changed in 0.5.2
+
+- Auth storage hardening: `auth.json` and the `auth/` artifacts attempt owner-only permissions where supported; `auth-browser` and `prepare_storage_state` add guards for interactive/manual auth flows. See [src/s2a/extract/auth.py](src/s2a/extract/auth.py) and CLI wiring in [src/s2a/cli.py](src/s2a/cli.py).
+- Updated default HTTP User-Agent string to include package version and repository URL (see [src/s2a/net.py](src/s2a/net.py)).
+
+### Security
+
+- `storage_state.json` and `auth.json` may include cookies or credentials; avoid committing these files. The CLI now attempts to restrict filesystem permissions when possible — see [USER_GUIDE.md](USER_GUIDE.md) for guidance.
+
+### Fixed in 0.5.2
+
+- Minor fixes and test updates to accommodate streaming asset downloads and redirect emission.
 
 ## [0.5.1] - 2026-04-08
 
