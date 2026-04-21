@@ -1,0 +1,39 @@
+{
+  "base_url": "https://laurenzo.net/",
+  "generated_at": "2026-04-07T06:33:23.601765+00:00",
+  "probe": { "final_home_url": "https://laurenzo.net/" },
+  "pages": [
+    {
+      "title": "Home",
+      "requested_url": "https://laurenzo.net/",
+      "final_url": "https://laurenzo.net/",
+      "canonical_url": "https://laurenzo.net/",
+      "meta_description": "",
+      "raw_html_path": "raw-html/index.html"
+    },
+    {
+      "title": "About",
+      "requested_url": "https://laurenzo.net/about",
+      "final_url": "https://laurenzo.net/about",
+      "canonical_url": "https://laurenzo.net/about",
+      "meta_description": "",
+      "raw_html_path": "raw-html/about.html"
+    },
+    {
+      "title": "Contact",
+      "requested_url": "https://laurenzo.net/contact",
+      "final_url": "https://laurenzo.net/contact",
+      "canonical_url": "https://laurenzo.net/contact",
+      "meta_description": "",
+      "raw_html_path": "raw-html/contact.html"
+    },
+    {
+      "title": "Memoirs of the Blind",
+      "requested_url": "https://laurenzo.net/projects/memoirs-of-the-blind",
+      "final_url": "https://laurenzo.net/projects/memoirs-of-the-blind",
+      "canonical_url": "https://laurenzo.net/projects/memoirs-of-the-blind",
+      "meta_description": "",
+      "raw_html_path": "raw-html/projects__memoirs-of-the-blind.html"
+    }
+  ]
+}
