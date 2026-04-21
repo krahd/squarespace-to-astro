@@ -34,6 +34,11 @@ jobs:
           . .venv/bin/activate
           pytest -q
 
+      - name: Install Playwright browsers
+        run: |
+          . .venv/bin/activate
+          python -m playwright install chromium
+
       - name: Build generated Astro projects (if present)
         run: |
           set -e
@@ -45,5 +50,52 @@ jobs:
               # allow build to be a no-op in some template projects
               npm run build || npm run build --if-present || true
               popd
+            fi
+          done
+
+      - name: Smoke-test built generated sites
+        run: |
+          set -e
+          # For each generated project that produced a `dist/` directory,
+          # serve the static output briefly and use Playwright (Python) to
+          # verify the root page loads successfully.
+          for d in generated/*; do
+            dist_dir="$d/dist"
+            if [ -d "$dist_dir" ]; then
+              echo "Smoke-testing $d"
+              # serve the built static site on localhost:8000
+              python -m http.server 8000 --directory "$dist_dir" &>/dev/null &
+              PID=$!
+              # wait for the server to become available
+              for i in $(seq 1 20); do
+                if curl -sSf http://127.0.0.1:8000/ >/dev/null 2>&1; then
+                  break
+                fi
+                sleep 1
+              done
+              # run Playwright check using the venv Python
+              . .venv/bin/activate
+              python - <<'PY'
+from playwright.sync_api import sync_playwright
+import sys
+try:
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page()
+        page.goto("http://127.0.0.1:8000/", timeout=10000)
+        if page.status != 200:
+            print("Non-200 status:", page.status)
+            sys.exit(1)
+        content = page.content()
+        if "<html" not in content.lower():
+            print("Unexpected content")
+            sys.exit(1)
+        browser.close()
+except Exception as e:
+    print("Playwright error:", e)
+    sys.exit(1)
+PY
+              kill $PID || true
+              sleep 1
             fi
           done
