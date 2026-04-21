@@ -4,9 +4,21 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/publish-pypi.yml'
 
 jobs:
+  validate:
+    if: github.event_name == 'push'
+    name: Validate workflow file change
+    runs-on: ubuntu-latest
+    steps:
+      - name: No-op on workflow change
+        run: echo "Workflow file change; nothing to execute."
+
   publish:
+    if: github.event_name != 'push'
     name: Build and publish to PyPI
     runs-on: ubuntu-latest
     steps:
