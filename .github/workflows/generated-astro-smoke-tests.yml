@@ -87,26 +87,26 @@ jobs:
               done
               # run Playwright check using the venv Python
               . .venv/bin/activate
-              python - <<'PY'
-from playwright.sync_api import sync_playwright
-import sys
-try:
-    with sync_playwright() as p:
-        browser = p.chromium.launch()
-        page = browser.new_page()
-        page.goto("http://127.0.0.1:8000/", timeout=10000)
-        if page.status != 200:
-            print("Non-200 status:", page.status)
-            sys.exit(1)
-        content = page.content()
-        if "<html" not in content.lower():
-            print("Unexpected content")
-            sys.exit(1)
-        browser.close()
-except Exception as e:
-    print("Playwright error:", e)
-    sys.exit(1)
-PY
+                python - <<'PY'
+                from playwright.sync_api import sync_playwright
+                import sys
+                try:
+                  with sync_playwright() as p:
+                    browser = p.chromium.launch()
+                    page = browser.new_page()
+                    page.goto("http://127.0.0.1:8000/", timeout=10000)
+                    if page.status != 200:
+                      print("Non-200 status:", page.status)
+                      sys.exit(1)
+                    content = page.content()
+                    if "<html" not in content.lower():
+                      print("Unexpected content")
+                      sys.exit(1)
+                    browser.close()
+                except Exception as e:
+                  print("Playwright error:", e)
+                  sys.exit(1)
+                PY
               kill $PID || true
               sleep 1
             fi
