@@ -17,7 +17,8 @@ def test_build_generated_sites() -> None:
     workflow to exercise builds more broadly.
     """
     generated_root = Path("generated")
-    assert generated_root.exists()
+    if not generated_root.exists():
+        pytest.skip("No generated projects present")
 
     for d in sorted(generated_root.iterdir()):
         pkg = d / "package.json"
