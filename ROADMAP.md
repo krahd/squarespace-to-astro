@@ -29,7 +29,6 @@ Recent progress on the `0.5.x` line (summarized):
 
 Remaining high-priority items:
 
-- Publish the package to PyPI (requires a PyPI API token and a small workflow addition to the release pipeline).
 - Expand fixture coverage and add generated-Astro smoke-tests that validate preview/`npm run dev` behavior on representative fixtures.
 - Continue improving redirect-planning output and migration reporting to make follow-up tasks and route review easier for end users.
 
