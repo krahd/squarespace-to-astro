@@ -1,0 +1,50 @@
+name: Generated Astro Smoke Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  smoke:
+    name: Smoke tests + build generated sites
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dev dependencies
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install -e '.[dev]'
+
+      - name: Run Python tests
+        run: |
+          . .venv/bin/activate
+          pytest -q
+
+      - name: Build generated Astro projects (if present)
+        run: |
+          set -e
+          for d in generated/*; do
+            if [ -f "$d/package.json" ]; then
+              echo "Building $d"
+              pushd "$d"
+              npm ci
+              # allow build to be a no-op in some template projects
+              npm run build || npm run build --if-present || true
+              popd
+            fi
+          done

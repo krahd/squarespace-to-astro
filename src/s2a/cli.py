@@ -465,6 +465,26 @@ def main(argv: Sequence[str] | None = None) -> int:
             console.emit(str(exc), always=True)
             return 1
         write_json(output_dir / "astro_generation.json", result)
+
+        # Write a lightweight migration report summarizing counts (non-fatal)
+        try:
+            manifest = read_json(output_dir / "migration-manifest.json")
+            astro_gen = read_json(output_dir / "astro_generation.json")
+            pages = manifest.get("pages", [])
+            posts = manifest.get("posts", [])
+            assets = manifest.get("assets", [])
+            report_summary = {
+                "pages": len(pages),
+                "posts": len(posts),
+                "assets": len(assets),
+                "pages_written": astro_gen.get("pages_written") if isinstance(astro_gen, dict) else None,
+                "posts_written": astro_gen.get("posts_written") if isinstance(astro_gen, dict) else None,
+                "warnings": manifest.get("warnings", []),
+            }
+            write_json(output_dir / "migration-report.json", report_summary)
+        except Exception:
+            # Non-fatal: do not block generation on report serialization
+            pass
         # Optionally emit redirects based on the generated migration manifest
         if getattr(args, "emit_redirects", False):
             try:
