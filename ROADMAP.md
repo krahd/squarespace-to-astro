@@ -24,6 +24,8 @@ Recent progress on the `0.5.x` line (summarized):
 - Native standalone bundles for macOS arm64 and Linux x86_64 were produced and attached to the `v0.5.2` GitHub Release; a Homebrew formula update for `krahd/homebrew-tap` was rendered and pushed.
 - CI: a smoke-test workflow and additional test harnesses were added to exercise generated fixtures in CI.
 - Tests & fixtures: representative trimmed fixtures (including `laurenzo-site` and `laurenzo-site-asset-verify`) and integration tests were added under `tests/fixtures/` to improve real-world coverage.
+ - Completed audit (2026-04-20): code and docs reviewed; audit summary added to `AUDIT-2026-04-20.md`. All tests pass locally (62 passed). Trimmed fixtures and tests added on branch `add-laurenzo-fixtures-docs` (PR #1).
+ - Immediate next steps: land PR for fixtures/docs, add a small release workflow to publish to PyPI (requires `PYPI_API_TOKEN` secret), and add generated-Astro smoke-tests in CI to validate `npm run dev`/preview behavior on representative fixtures.
 
 Remaining high-priority items:
 
