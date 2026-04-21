@@ -21,7 +21,6 @@ from s2a.url_utils import (
     make_absolute_url,
 )
 
-
 ProgressCallback = Callable[[int, int, str | None], None]
 
 
@@ -38,8 +37,9 @@ def crawl_site(
     pages: list[PageSnapshot] = []
 
     if progress_callback is not None:
-        progress_callback(0, crawl_progress_total(
-            queue, completed_pages=0, max_pages=max_pages), None)
+        progress_callback(
+            0, crawl_progress_total(queue, completed_pages=0, max_pages=max_pages), None
+        )
 
     while queue and len(pages) < max_pages:
         requested_url = canonicalize_page_url(queue.popleft())
@@ -66,7 +66,9 @@ def crawl_site(
             if progress_callback is not None:
                 progress_callback(
                     len(pages),
-                    crawl_progress_total(queue, completed_pages=len(pages), max_pages=max_pages),
+                    crawl_progress_total(
+                        queue, completed_pages=len(pages), max_pages=max_pages
+                    ),
                     None,
                 )
             continue
@@ -90,15 +92,23 @@ def crawl_site(
             html_path = store_raw_html(output_dir, final_url, fetch.text)
 
         if not is_html_content_type(fetch.content_type):
-            page_warnings.append("Skipped structured parsing because the response was not HTML.")
+            page_warnings.append(
+                "Skipped structured parsing because the response was not HTML."
+            )
         elif fetch.text:
             soup = BeautifulSoup(fetch.text, "html.parser")
-            title = soup.title.string.strip() if soup.title and soup.title.string else None
+            title = (
+                soup.title.string.strip() if soup.title and soup.title.string else None
+            )
             meta_description = read_meta_description(soup)
             canonical_url = read_canonical_url(soup, final_url)
-            headings = [heading.get_text(" ", strip=True)
-                        for heading in soup.find_all(["h1", "h2", "h3"])]
-            internal_links, external_links = extract_links(soup, final_url, probe.site_origin)
+            headings = [
+                heading.get_text(" ", strip=True)
+                for heading in soup.find_all(["h1", "h2", "h3"])
+            ]
+            internal_links, external_links = extract_links(
+                soup, final_url, probe.site_origin
+            )
             owner_route = urlsplit(final_url).path or "/"
             assets = extract_asset_references(soup, final_url, owner_route)
             asset_urls = list(dict.fromkeys(asset.source_url for asset in assets))
@@ -139,7 +149,9 @@ def crawl_site(
         if progress_callback is not None:
             progress_callback(
                 len(pages),
-                crawl_progress_total(queue, completed_pages=len(pages), max_pages=max_pages),
+                crawl_progress_total(
+                    queue, completed_pages=len(pages), max_pages=max_pages
+                ),
                 None,
             )
 
@@ -158,7 +170,9 @@ def crawl_site(
     )
 
 
-def crawl_progress_total(queue: deque[str], *, completed_pages: int, max_pages: int) -> int:
+def crawl_progress_total(
+    queue: deque[str], *, completed_pages: int, max_pages: int
+) -> int:
     return max(completed_pages, min(max_pages, completed_pages + len(queue)))
 
 
@@ -191,7 +205,9 @@ def read_meta_description(soup: BeautifulSoup) -> str | None:
 
 
 def read_canonical_url(soup: BeautifulSoup, base_url: str) -> str | None:
-    link = soup.find("link", attrs={"rel": lambda value: value and "canonical" in value})
+    link = soup.find(
+        "link", attrs={"rel": lambda value: value and "canonical" in value}
+    )
     if link and link.get("href"):
         return canonicalize_page_url(make_absolute_url(base_url, link["href"]))
     return None

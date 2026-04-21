@@ -4,7 +4,6 @@ import os
 import sys
 from pathlib import Path
 
-
 BUNDLED_BROWSER_DIR_NAMES = ("playwright-browsers", "ms-playwright")
 
 

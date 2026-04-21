@@ -23,7 +23,6 @@ from s2a.normalize.models import (
     GeneratedNavigationItem,
 )
 
-
 NOISE_PATTERN = re.compile(
     r"nav|menu|header|footer|breadcrumb|share|social|cookie|newsletter|pagination|search|sidebar",
     re.IGNORECASE,
@@ -93,7 +92,9 @@ def generate_astro_project(
     snapshot = read_json(snapshot_path)
     xml_import = read_json(xml_import_path) if xml_import_path else None
     asset_manifest_path = snapshot_path.parent / "asset_manifest.json"
-    asset_manifest = read_json(asset_manifest_path) if asset_manifest_path.exists() else None
+    asset_manifest = (
+        read_json(asset_manifest_path) if asset_manifest_path.exists() else None
+    )
     upgrade_warnings: list[str] = []
     if asset_manifest is not None:
         asset_manifest, upgrade_warnings, upgraded = upgrade_legacy_asset_manifest(
@@ -167,9 +168,8 @@ def build_astro_manifest(
         or find_page_title(page_snapshots, "/")
         or "Squarespace Migration"
     )
-    site_description = (
-        xml_site_description
-        or find_page_description(page_snapshots, "/")
+    site_description = xml_site_description or find_page_description(
+        page_snapshots, "/"
     )
     base_url = probe.get("final_home_url") or snapshot.get("base_url")
     blog_base_path = infer_blog_base_path(page_snapshots, snapshot_root, xml_items)
@@ -182,7 +182,9 @@ def build_astro_manifest(
         }
     )
     asset_lookup = build_asset_lookup(asset_manifest)
-    raw_homepage_html = raw_html_from_page(find_home_page_snapshot(page_snapshots), snapshot_root)
+    raw_homepage_html = raw_html_from_page(
+        find_home_page_snapshot(page_snapshots), snapshot_root
+    )
     header_style = infer_header_style(raw_homepage_html, fidelity_mode)
     background_style = infer_background_style(raw_homepage_html, fidelity_mode)
     header_width = infer_header_width(raw_homepage_html, fidelity_mode)
@@ -244,11 +246,13 @@ def build_astro_manifest(
             ),
         )
         warnings.append(
-            "A placeholder homepage was created because no extracted home page was available.")
+            "A placeholder homepage was created because no extracted home page was available."
+        )
 
     if not posts:
         warnings.append(
-            "No blog posts were generated. The Astro site will contain page content only.")
+            "No blog posts were generated. The Astro site will contain page content only."
+        )
 
     if skipped_utility_routes:
         warnings.append(
@@ -299,13 +303,19 @@ def build_page_entries(
 ) -> list[GeneratedContentEntry]:
     entries: dict[str, GeneratedContentEntry] = {}
     xml_pages = {
-        normalize_path(urlsplit(item.get("link") or f"/{item.get('slug') or ''}").path): item
+        normalize_path(
+            urlsplit(item.get("link") or f"/{item.get('slug') or ''}").path
+        ): item
         for item in xml_items
         if item.get("post_type") == "page" and item.get("status") == "publish"
     }
     posts_exist = any(
-        item.get("post_type") == "post" and item.get("status") == "publish" for item in xml_items
-    ) or any(is_post_path(route_path_for_page(page), blog_base_path) for page in page_snapshots)
+        item.get("post_type") == "post" and item.get("status") == "publish"
+        for item in xml_items
+    ) or any(
+        is_post_path(route_path_for_page(page), blog_base_path)
+        for page in page_snapshots
+    )
 
     for page in page_snapshots:
         route_path = route_path_for_page(page)
@@ -337,7 +347,8 @@ def build_page_entries(
             entry = replace(
                 entry,
                 title=clean_title(xml_page.get("title") or entry.title, site_title),
-                description=excerpt_text(xml_page.get("excerpt_html")) or entry.description,
+                description=excerpt_text(xml_page.get("excerpt_html"))
+                or entry.description,
                 source_url=xml_page.get("link") or entry.source_url,
                 canonical_url=xml_page.get("link") or entry.canonical_url,
                 body=body,
@@ -363,7 +374,9 @@ def build_page_entries(
             markdown_first=markdown_first,
         )
 
-    ordered = sorted(entries.values(), key=lambda entry: (not entry.home, entry.route_path))
+    ordered = sorted(
+        entries.values(), key=lambda entry: (not entry.home, entry.route_path)
+    )
     return ordered
 
 
@@ -385,11 +398,15 @@ def build_post_entries(
         if xml_item.get("post_type") != "post" or xml_item.get("status") != "publish":
             continue
 
-        route_path = normalize_path(urlsplit(xml_item.get(
-            "link") or f"{blog_base_path}/{xml_item.get('slug') or ''}").path)
+        route_path = normalize_path(
+            urlsplit(
+                xml_item.get("link") or f"{blog_base_path}/{xml_item.get('slug') or ''}"
+            ).path
+        )
         if not is_post_path(route_path, blog_base_path):
             route_path = normalize_path(
-                f"{blog_base_path}/{xml_item.get('slug') or route_path.strip('/')}")
+                f"{blog_base_path}/{xml_item.get('slug') or route_path.strip('/')}"
+            )
         entries[route_path] = generated_post_from_xml_item(
             xml_item,
             route_path,
@@ -497,7 +514,9 @@ def generated_entry_from_xml_item(
         layout_strategy=layout_strategy,
         markdown_first=markdown_first,
     )
-    title = clean_title(xml_item.get("title") or label_from_path(route_path), site_title)
+    title = clean_title(
+        xml_item.get("title") or label_from_path(route_path), site_title
+    )
 
     if not body:
         body = f"# {title}\n"
@@ -590,7 +609,9 @@ def generated_post_from_xml_item(
         layout_strategy=layout_strategy,
         markdown_first=markdown_first,
     )
-    title = clean_title(xml_item.get("title") or label_from_path(route_path), site_title)
+    title = clean_title(
+        xml_item.get("title") or label_from_path(route_path), site_title
+    )
 
     if not body:
         body = f"# {title}\n"
@@ -625,11 +646,11 @@ def build_navigation(
     site_title: str,
     base_url: str | None,
 ) -> tuple[list[GeneratedNavigationItem], str]:
-    page_titles = {
-        page.route_path: page.title for page in pages
-    }
+    page_titles = {page.route_path: page.title for page in pages}
     snapshot_titles = {
-        route_path_for_page(page): clean_title(page.get("title") or label_from_path(route_path_for_page(page)), site_title)
+        route_path_for_page(page): clean_title(
+            page.get("title") or label_from_path(route_path_for_page(page)), site_title
+        )
         for page in page_snapshots
     }
 
@@ -672,19 +693,29 @@ def build_navigation(
             elif path == "/":
                 title = "Home"
             else:
-                title = page_titles.get(path) or snapshot_titles.get(path) or label_from_path(path)
+                title = (
+                    page_titles.get(path)
+                    or snapshot_titles.get(path)
+                    or label_from_path(path)
+                )
             navigation.append(GeneratedNavigationItem(title=title, url=path))
             seen.add(path)
 
     if "/" not in seen:
-        title = "Home" if navigation_source == "probe-links" else page_titles.get("/") or "Home"
+        title = (
+            "Home"
+            if navigation_source == "probe-links"
+            else page_titles.get("/") or "Home"
+        )
         navigation.insert(0, GeneratedNavigationItem(title=title, url="/"))
         seen.add("/")
 
     for page in pages:
         if page.home or page.route_path in seen:
             continue
-        navigation.append(GeneratedNavigationItem(title=page.title, url=page.route_path))
+        navigation.append(
+            GeneratedNavigationItem(title=page.title, url=page.route_path)
+        )
         seen.add(page.route_path)
 
     if posts and blog_base_path not in seen:
@@ -698,7 +729,9 @@ def extract_navigation_from_homepage(
     snapshot_root: Path,
     base_url: str | None,
 ) -> tuple[list[GeneratedNavigationItem], str]:
-    raw_html = raw_html_from_page(find_home_page_snapshot(page_snapshots), snapshot_root)
+    raw_html = raw_html_from_page(
+        find_home_page_snapshot(page_snapshots), snapshot_root
+    )
     if not raw_html:
         return [], "probe-links"
 
@@ -713,7 +746,9 @@ def extract_navigation_from_homepage(
     return [], "probe-links"
 
 
-def navigation_items_from_container(container: Tag, base_url: str | None) -> list[GeneratedNavigationItem]:
+def navigation_items_from_container(
+    container: Tag, base_url: str | None
+) -> list[GeneratedNavigationItem]:
     items: list[GeneratedNavigationItem] = []
     seen: set[str] = set()
     base_host = urlsplit(base_url).netloc if base_url else ""
@@ -753,9 +788,14 @@ def write_project(
     (output_dir / "src/content/pages").mkdir(parents=True, exist_ok=True)
     (output_dir / "src/content/posts").mkdir(parents=True, exist_ok=True)
     write_json(output_dir / "package.json", render_package_json(manifest, project_name))
-    write_text(output_dir / "astro.config.mjs", render_astro_config(manifest, base_path))
+    write_text(
+        output_dir / "astro.config.mjs", render_astro_config(manifest, base_path)
+    )
     write_text(output_dir / "tsconfig.json", render_tsconfig())
-    write_text(output_dir / "src/content.config.ts", render_content_config(bool(manifest.posts)))
+    write_text(
+        output_dir / "src/content.config.ts",
+        render_content_config(bool(manifest.posts)),
+    )
     write_text(output_dir / "src/layouts/BaseLayout.astro", render_base_layout())
     write_text(output_dir / "src/utils/routing.ts", render_routing_util())
     write_text(output_dir / "src/styles/site.css", render_site_css())
@@ -765,8 +805,11 @@ def write_project(
     copy_localized_assets(output_dir, snapshot_root, asset_manifest)
 
     if manifest.posts:
-        blog_segments = [segment for segment in manifest.blog_base_path.strip(
-            "/").split("/") if segment]
+        blog_segments = [
+            segment
+            for segment in manifest.blog_base_path.strip("/").split("/")
+            if segment
+        ]
         blog_dir = output_dir / "src/pages" / Path(*blog_segments)
         import_prefix = "../" * (len(blog_segments) + 1)
         write_text(blog_dir / "index.astro", render_blog_index(import_prefix))
@@ -807,8 +850,12 @@ def write_content_files(target_dir: Path, entries: list[GeneratedContentEntry]) 
 
 
 def render_markdown_file(frontmatter: dict, body: str) -> str:
-    cleaned = {key: value for key, value in frontmatter.items() if value not in (None, [], "")}
-    yaml_frontmatter = yaml.safe_dump(cleaned, sort_keys=False, allow_unicode=True).strip()
+    cleaned = {
+        key: value for key, value in frontmatter.items() if value not in (None, [], "")
+    }
+    yaml_frontmatter = yaml.safe_dump(
+        cleaned, sort_keys=False, allow_unicode=True
+    ).strip()
     body = body.strip()
     return f"---\n{yaml_frontmatter}\n---\n\n{body}\n"
 
@@ -830,7 +877,11 @@ def render_package_json(manifest: AstroManifest, project_name: str | None) -> di
 
 
 def render_astro_config(manifest: AstroManifest, base_path: str | None) -> str:
-    lines = ["import { defineConfig } from 'astro/config';", "", "export default defineConfig({"]
+    lines = [
+        "import { defineConfig } from 'astro/config';",
+        "",
+        "export default defineConfig({",
+    ]
     if manifest.base_url:
         lines.append(f"  site: '{manifest.base_url}',")
     if base_path:
@@ -1844,13 +1895,17 @@ const isImmersive = entry.data.presentation === 'immersive';
 """.replace("__PREFIX__", import_prefix)
 
 
-def infer_blog_base_path(page_snapshots: list[dict], snapshot_root: Path, xml_items: list[dict]) -> str:
+def infer_blog_base_path(
+    page_snapshots: list[dict], snapshot_root: Path, xml_items: list[dict]
+) -> str:
     counts: Counter[str] = Counter()
 
     for item in xml_items:
         if item.get("post_type") != "post" or item.get("status") != "publish":
             continue
-        route_path = normalize_path(urlsplit(item.get("link") or f"/{item.get('slug') or ''}").path)
+        route_path = normalize_path(
+            urlsplit(item.get("link") or f"/{item.get('slug') or ''}").path
+        )
         blog_path = candidate_blog_base_path(route_path)
         if blog_path:
             counts[blog_path] += 5
@@ -1886,7 +1941,9 @@ def blog_base_path_from_page_json(page: dict, snapshot_root: Path) -> str | None
     if "blog" not in type_markers:
         return None
 
-    collection_path = normalize_path(urlsplit(str(collection.get("fullUrl") or "")).path)
+    collection_path = normalize_path(
+        urlsplit(str(collection.get("fullUrl") or "")).path
+    )
     if collection_path != "/":
         return collection_path
 
@@ -1896,7 +1953,9 @@ def blog_base_path_from_page_json(page: dict, snapshot_root: Path) -> str | None
         for item in items:
             if not isinstance(item, dict):
                 continue
-            blog_path = candidate_blog_base_path(urlsplit(str(item.get("fullUrl") or "")).path)
+            blog_path = candidate_blog_base_path(
+                urlsplit(str(item.get("fullUrl") or "")).path
+            )
             if blog_path:
                 item_paths.append(blog_path)
 
@@ -1942,7 +2001,9 @@ def known_blog_base_path(route_path: str) -> str | None:
     return None
 
 
-def determine_blog_title(page_snapshots: list[dict], blog_base_path: str, site_title: str) -> str:
+def determine_blog_title(
+    page_snapshots: list[dict], blog_base_path: str, site_title: str
+) -> str:
     for page in page_snapshots:
         if route_path_for_page(page) == blog_base_path and page.get("title"):
             return clean_title(page["title"], site_title)
@@ -1965,7 +2026,9 @@ def normalize_path(path: str | None) -> str:
 
 
 def path_segments(path: str) -> list[str]:
-    return [segment for segment in normalize_path(path).strip("/").split("/") if segment]
+    return [
+        segment for segment in normalize_path(path).strip("/").split("/") if segment
+    ]
 
 
 def is_post_path(route_path: str, blog_base_path: str) -> bool:
@@ -2004,7 +2067,9 @@ def html_from_snapshot(
     if not html:
         return ""
 
-    return extract_main_html(html, fidelity_mode=fidelity_mode, layout_strategy=layout_strategy)
+    return extract_main_html(
+        html, fidelity_mode=fidelity_mode, layout_strategy=layout_strategy
+    )
 
 
 def raw_html_from_page(page: dict | None, snapshot_root: Path) -> str:
@@ -2022,14 +2087,17 @@ def raw_html_from_page(page: dict | None, snapshot_root: Path) -> str:
     return full_path.read_text(encoding="utf-8")
 
 
-def extract_main_html(html: str, *, fidelity_mode: str = "high", layout_strategy: str = "hybrid") -> str:
+def extract_main_html(
+    html: str, *, fidelity_mode: str = "high", layout_strategy: str = "hybrid"
+) -> str:
     soup = BeautifulSoup(html, "html.parser")
     candidates = [
         soup.find("article"),
         soup.find("main"),
         soup.select_one("[role='main']"),
         soup.select_one(
-            ".main-content, .Main-content, .entry-content, .blog-item-wrapper, .sqs-layout, .page-section"),
+            ".main-content, .Main-content, .entry-content, .blog-item-wrapper, .sqs-layout, .page-section"
+        ),
         soup.body,
     ]
 
@@ -2037,10 +2105,13 @@ def extract_main_html(html: str, *, fidelity_mode: str = "high", layout_strategy
         if candidate is None:
             continue
         fragment = BeautifulSoup(str(candidate), "html.parser")
-        preserve_layout_styles = fidelity_mode != "minimal" and contains_structured_layout(fragment)
+        preserve_layout_styles = (
+            fidelity_mode != "minimal" and contains_structured_layout(fragment)
+        )
         remove_noise(
             fragment,
-            preserve_embeds=fidelity_mode != "minimal" or layout_strategy == "components",
+            preserve_embeds=fidelity_mode != "minimal"
+            or layout_strategy == "components",
             preserve_layout_styles=preserve_layout_styles,
         )
         text_length = len(" ".join(fragment.stripped_strings))
@@ -2051,9 +2122,12 @@ def extract_main_html(html: str, *, fidelity_mode: str = "high", layout_strategy
 
 
 def contains_structured_layout(fragment: BeautifulSoup) -> bool:
-    return fragment.select_one(
-        ".portfolio-grid-basic, .sqs-gallery-design-grid, [data-fluid-engine-section], [data-fluid-engine], .fluid-engine, .fe-block"
-    ) is not None
+    return (
+        fragment.select_one(
+            ".portfolio-grid-basic, .sqs-gallery-design-grid, [data-fluid-engine-section], [data-fluid-engine], .fluid-engine, .fe-block"
+        )
+        is not None
+    )
 
 
 def remove_noise(
@@ -2129,7 +2203,9 @@ def build_asset_lookup(asset_manifest: dict | None) -> dict[str, str]:
     return lookup
 
 
-def copy_localized_assets(output_dir: Path, snapshot_root: Path, asset_manifest: dict | None) -> None:
+def copy_localized_assets(
+    output_dir: Path, snapshot_root: Path, asset_manifest: dict | None
+) -> None:
     if not asset_manifest:
         return
 
@@ -2163,7 +2239,9 @@ def localize_content_html(html: str, asset_lookup: dict[str, str]) -> str:
     return fragment.decode().strip()
 
 
-def rewrite_style_tag_urls(fragment: BeautifulSoup, asset_lookup: dict[str, str]) -> None:
+def rewrite_style_tag_urls(
+    fragment: BeautifulSoup, asset_lookup: dict[str, str]
+) -> None:
     for style_tag in fragment.find_all("style"):
         style_text = style_tag.string or style_tag.get_text()
         if not style_text:
@@ -2171,9 +2249,13 @@ def rewrite_style_tag_urls(fragment: BeautifulSoup, asset_lookup: dict[str, str]
         style_tag.string = rewrite_style_urls(style_text, asset_lookup)
 
 
-def rewrite_asset_attributes(fragment: BeautifulSoup, asset_lookup: dict[str, str]) -> None:
+def rewrite_asset_attributes(
+    fragment: BeautifulSoup, asset_lookup: dict[str, str]
+) -> None:
     for tag in fragment.find_all("img"):
-        rewrite_primary_attribute(tag, "src", ("src", "data-src", "data-image"), asset_lookup)
+        rewrite_primary_attribute(
+            tag, "src", ("src", "data-src", "data-image"), asset_lookup
+        )
         rewrite_srcset_attribute(tag, ("srcset", "data-srcset"), asset_lookup)
 
     for tag in fragment.find_all("source"):
@@ -2182,7 +2264,9 @@ def rewrite_asset_attributes(fragment: BeautifulSoup, asset_lookup: dict[str, st
 
     for tag in fragment.find_all("video"):
         rewrite_primary_attribute(tag, "src", ("src", "data-src"), asset_lookup)
-        rewrite_primary_attribute(tag, "poster", ("poster", "data-poster"), asset_lookup)
+        rewrite_primary_attribute(
+            tag, "poster", ("poster", "data-poster"), asset_lookup
+        )
 
     for tag in fragment.find_all("audio"):
         rewrite_primary_attribute(tag, "src", ("src", "data-src"), asset_lookup)
@@ -2196,7 +2280,9 @@ def rewrite_asset_attributes(fragment: BeautifulSoup, asset_lookup: dict[str, st
             tag["style"] = rewrite_style_urls(style_value, asset_lookup)
 
 
-def rewrite_video_audio_blocks(fragment: BeautifulSoup, asset_lookup: dict[str, str]) -> None:
+def rewrite_video_audio_blocks(
+    fragment: BeautifulSoup, asset_lookup: dict[str, str]
+) -> None:
     for tag_name, label in (("video", "Video"), ("audio", "Audio")):
         for media in list(fragment.find_all(tag_name)):
             replacement = BeautifulSoup("", "html.parser")
@@ -2429,13 +2515,15 @@ def build_fluid_engine_section(soup: BeautifulSoup, section: Tag) -> Tag | None:
     rebuilt_section.append(rebuilt_grid)
 
     for block in fluid_root.find_all(
-        lambda tag: isinstance(
-            tag, Tag) and tag.name == "div" and "fe-block" in tag.get("class", []),
+        lambda tag: isinstance(tag, Tag)
+        and tag.name == "div"
+        and "fe-block" in tag.get("class", []),
         recursive=False,
     ):
         block_classes = block.get("class", [])
         block_identifier = next(
-            (name for name in block_classes if name.startswith("fe-block-")), None)
+            (name for name in block_classes if name.startswith("fe-block-")), None
+        )
         block_kind = fluid_block_kind(block)
         block_html = fluid_block_content_html(block)
         if not block_html:
@@ -2482,7 +2570,13 @@ def rebuild_classic_editor_components(html: str) -> str | None:
     for layout in soup.find_all(is_sqs_layout):
         if layout.find_parent(is_sqs_layout) is not None:
             continue
-        if layout.find_parent(lambda tag: isinstance(tag, Tag) and tag.has_attr("data-fluid-engine-section")) is not None:
+        if (
+            layout.find_parent(
+                lambda tag: isinstance(tag, Tag)
+                and tag.has_attr("data-fluid-engine-section")
+            )
+            is not None
+        ):
             continue
 
         rebuilt_layout = build_classic_editor_layout(soup, layout)
@@ -2499,11 +2593,17 @@ def rebuild_classic_editor_components(html: str) -> str | None:
 
 
 def is_sqs_layout(tag: Tag | None) -> bool:
-    return isinstance(tag, Tag) and tag.name == "div" and "sqs-layout" in class_tokens(tag)
+    return (
+        isinstance(tag, Tag) and tag.name == "div" and "sqs-layout" in class_tokens(tag)
+    )
 
 
 def build_classic_editor_layout(soup: BeautifulSoup, layout: Tag) -> Tag | None:
-    rows = [child for child in layout.find_all(recursive=False) if is_classic_editor_row(child)]
+    rows = [
+        child
+        for child in layout.find_all(recursive=False)
+        if is_classic_editor_row(child)
+    ]
     if not rows and classic_direct_blocks(layout):
         rows = [layout]
     if not rows:
@@ -2526,14 +2626,20 @@ def build_classic_editor_layout(soup: BeautifulSoup, layout: Tag) -> Tag | None:
 
 def is_classic_editor_row(tag: Tag | None) -> bool:
     tokens = class_tokens(tag)
-    return isinstance(tag, Tag) and tag.name == "div" and "row" in tokens and "sqs-row" in tokens
+    return (
+        isinstance(tag, Tag)
+        and tag.name == "div"
+        and "row" in tokens
+        and "sqs-row" in tokens
+    )
 
 
 def build_classic_editor_row(soup: BeautifulSoup, row: Tag) -> Tag | None:
     columns = [
         child
         for child in row.find_all(recursive=False)
-        if isinstance(child, Tag) and any(token.startswith("sqs-col-") for token in class_tokens(child))
+        if isinstance(child, Tag)
+        and any(token.startswith("sqs-col-") for token in class_tokens(child))
     ]
     if not columns and classic_direct_blocks(row):
         columns = [row]
@@ -2556,7 +2662,9 @@ def build_classic_editor_row(soup: BeautifulSoup, row: Tag) -> Tag | None:
     return rebuilt_row
 
 
-def build_classic_editor_column(soup: BeautifulSoup, column: Tag, start_column: int) -> Tag | None:
+def build_classic_editor_column(
+    soup: BeautifulSoup, column: Tag, start_column: int
+) -> Tag | None:
     blocks = classic_direct_blocks(column)
     if not blocks:
         return None
@@ -2585,7 +2693,9 @@ def classic_direct_blocks(node: Tag) -> list[Tag]:
         if not isinstance(child, Tag):
             continue
         tokens = class_tokens(child)
-        if "sqs-block" in tokens or any(token.startswith("sqs-block-") for token in tokens):
+        if "sqs-block" in tokens or any(
+            token.startswith("sqs-block-") for token in tokens
+        ):
             blocks.append(child)
     return blocks
 
@@ -2601,7 +2711,9 @@ def classic_column_span(node: Tag) -> int:
 def build_classic_editor_block(soup: BeautifulSoup, block: Tag) -> Tag | None:
     block_kind = classic_block_kind(block)
     if block_kind == "gallery":
-        block_html = rebuild_gallery_components(str(block)) or classic_generic_block_html(block)
+        block_html = rebuild_gallery_components(
+            str(block)
+        ) or classic_generic_block_html(block)
     elif block_kind == "image":
         block_html = classic_image_block_html(block)
     elif block_kind == "text":
@@ -2630,7 +2742,13 @@ def build_classic_editor_block(soup: BeautifulSoup, block: Tag) -> Tag | None:
 
 def classic_block_kind(block: Tag) -> str:
     tokens = class_tokens(block)
-    if "gallery-block" in tokens or block.select_one(".sqs-gallery, .sqs-gallery-design-grid, .sqs-gallery-block-grid") is not None:
+    if (
+        "gallery-block" in tokens
+        or block.select_one(
+            ".sqs-gallery, .sqs-gallery-design-grid, .sqs-gallery-block-grid"
+        )
+        is not None
+    ):
         return "gallery"
     if "horizontalrule-block" in tokens or block.get("data-block-type") == "47":
         return "rule"
@@ -2685,7 +2803,9 @@ def classic_image_block_html(block: Tag) -> str:
 
 
 def classic_text_block_html(block: Tag) -> str:
-    container = block.select_one(".sqs-html-content") or block.select_one(".sqs-block-content")
+    container = block.select_one(".sqs-html-content") or block.select_one(
+        ".sqs-block-content"
+    )
     return component_inner_html(container)
 
 
@@ -2701,14 +2821,18 @@ def classic_embed_block_html(block: Tag) -> str:
         iframe_html = str(iframe)
     else:
         data_html = first_non_empty(
-            block.select_one("[data-html]") and block.select_one("[data-html]").get("data-html"),
+            block.select_one("[data-html]")
+            and block.select_one("[data-html]").get("data-html"),
             payload.get("html") if payload else None,
         )
         if data_html:
             iframe_html = unescape(data_html)
 
-    iframe_fragment = BeautifulSoup(
-        iframe_html, "html.parser") if iframe_html else BeautifulSoup("", "html.parser")
+    iframe_fragment = (
+        BeautifulSoup(iframe_html, "html.parser")
+        if iframe_html
+        else BeautifulSoup("", "html.parser")
+    )
     rebuilt_iframe = iframe_fragment.find("iframe")
     if rebuilt_iframe is not None:
         src = normalize_protocol_relative_url(rebuilt_iframe.get("src"))
@@ -2718,13 +2842,16 @@ def classic_embed_block_html(block: Tag) -> str:
         wrapper.append(rebuilt_iframe)
     else:
         thumbnail_url = normalize_protocol_relative_url(
-            payload.get("thumbnailUrl") if payload else None)
+            payload.get("thumbnailUrl") if payload else None
+        )
         if thumbnail_url:
             thumbnail = rebuilt.new_tag("img", src=thumbnail_url)
             thumbnail["alt"] = payload.get("providerName") or "Embedded media preview"
             wrapper.append(thumbnail)
 
-        video_url = normalize_protocol_relative_url(payload.get("url") if payload else None)
+        video_url = normalize_protocol_relative_url(
+            payload.get("url") if payload else None
+        )
         if video_url:
             paragraph = rebuilt.new_tag("p")
             link = rebuilt.new_tag("a", href=video_url)
@@ -2738,7 +2865,9 @@ def classic_embed_block_html(block: Tag) -> str:
         if isinstance(description, dict):
             description_html = description.get("html") or ""
     if not description_html:
-        description_html = component_inner_html(block.select_one(".sqs-html-content, figcaption"))
+        description_html = component_inner_html(
+            block.select_one(".sqs-html-content, figcaption")
+        )
 
     if component_html_is_meaningful(description_html):
         caption = rebuilt.new_tag("div")
@@ -2764,19 +2893,31 @@ def component_inner_html(container: Tag | None) -> str:
     if container is None:
         return ""
 
-    fragment = BeautifulSoup("".join(str(child) for child in container.contents), "html.parser")
+    fragment = BeautifulSoup(
+        "".join(str(child) for child in container.contents), "html.parser"
+    )
     sanitize_component_fragment(fragment)
     return fragment.decode().strip()
 
 
 def sanitize_component_fragment(fragment: BeautifulSoup) -> None:
-    for comment in list(fragment.find_all(string=lambda value: isinstance(value, Comment))):
+    for comment in list(
+        fragment.find_all(string=lambda value: isinstance(value, Comment))
+    ):
         comment.extract()
 
-    for tag in list(fragment.find_all(["script", "noscript", "style", "meta", "link", "xml"])):
+    for tag in list(
+        fragment.find_all(["script", "noscript", "style", "meta", "link", "xml"])
+    ):
         tag.decompose()
 
-    for tag in list(fragment.find_all(lambda current: isinstance(current, Tag) and current.name and ":" in current.name)):
+    for tag in list(
+        fragment.find_all(
+            lambda current: isinstance(current, Tag)
+            and current.name
+            and ":" in current.name
+        )
+    ):
         if list(tag.stripped_strings):
             tag.unwrap()
         else:
@@ -2784,7 +2925,10 @@ def sanitize_component_fragment(fragment: BeautifulSoup) -> None:
 
     for paragraph in list(fragment.find_all("p")):
         text = paragraph.get_text(" ", strip=True).replace("\xa0", "").strip()
-        if not text and paragraph.find(["img", "iframe", "video", "audio", "source"]) is None:
+        if (
+            not text
+            and paragraph.find(["img", "iframe", "video", "audio", "source"]) is None
+        ):
             paragraph.decompose()
 
     for image in fragment.find_all("img"):
@@ -2838,8 +2982,9 @@ def component_html_is_meaningful(html: str) -> bool:
 
 def parse_fluid_engine_layout(section: Tag) -> dict[str, dict[str, str]]:
     layout_map: dict[str, dict[str, str]] = {}
-    style_text = "\n".join(style_tag.get_text("\n", strip=True)
-                           for style_tag in section.find_all("style"))
+    style_text = "\n".join(
+        style_tag.get_text("\n", strip=True) for style_tag in section.find_all("style")
+    )
     if not style_text:
         return layout_map
 
@@ -2866,9 +3011,15 @@ def fluid_block_kind(block: Tag) -> str:
     sqs_block = block.select_one(".sqs-block")
     if sqs_block is None:
         return "html"
-    if "horizontalrule-block" in sqs_block.get("class", []) or sqs_block.get("data-block-type") == "47":
+    if (
+        "horizontalrule-block" in sqs_block.get("class", [])
+        or sqs_block.get("data-block-type") == "47"
+    ):
         return "rule"
-    if sqs_block.get("data-sqsp-block") == "embed" or sqs_block.select_one("iframe") is not None:
+    if (
+        sqs_block.get("data-sqsp-block") == "embed"
+        or sqs_block.select_one("iframe") is not None
+    ):
         return "embed"
     if sqs_block.select_one("img") is not None:
         return "image"
@@ -2905,7 +3056,9 @@ def rebuild_gallery_components(html: str) -> str | None:
     if grid is None:
         return None
 
-    items = grid.select(".grid-item, .gallery-item, .sqs-gallery-design-grid-slide, .slide")
+    items = grid.select(
+        ".grid-item, .gallery-item, .sqs-gallery-design-grid-slide, .slide"
+    )
     if not items:
         items = [child for child in grid.find_all(recursive=False) if child.find("img")]
     if len(items) < 3:
@@ -2919,12 +3072,16 @@ def rebuild_gallery_components(html: str) -> str | None:
     section.append(gallery_grid)
 
     for item in items:
-        anchor = item if item.name == "a" and item.get("href") else item.find("a", href=True)
+        anchor = (
+            item if item.name == "a" and item.get("href") else item.find("a", href=True)
+        )
         image = item.find("img")
         if image is None:
             continue
 
-        card = rebuilt.new_tag(anchor.name if anchor and anchor.name == "a" else "article")
+        card = rebuilt.new_tag(
+            anchor.name if anchor and anchor.name == "a" else "article"
+        )
         card["class"] = "s2a-gallery-card"
         if anchor and anchor.get("href"):
             card["href"] = anchor.get("href")
@@ -2939,18 +3096,18 @@ def rebuild_gallery_components(html: str) -> str | None:
         card.append(media)
 
         title = first_non_empty(
-            item.select_one(
-                ".portfolio-title") and item.select_one(".portfolio-title").get_text(" ", strip=True),
-            item.select_one(
-                ".image-title") and item.select_one(".image-title").get_text(" ", strip=True),
+            item.select_one(".portfolio-title")
+            and item.select_one(".portfolio-title").get_text(" ", strip=True),
+            item.select_one(".image-title")
+            and item.select_one(".image-title").get_text(" ", strip=True),
             anchor.get_text(" ", strip=True) if anchor else None,
             image.get("alt"),
         )
         caption = first_non_empty(
-            item.select_one(
-                ".portfolio-description") and item.select_one(".portfolio-description").get_text(" ", strip=True),
-            item.select_one(
-                ".image-caption") and item.select_one(".image-caption").get_text(" ", strip=True),
+            item.select_one(".portfolio-description")
+            and item.select_one(".portfolio-description").get_text(" ", strip=True),
+            item.select_one(".image-caption")
+            and item.select_one(".image-caption").get_text(" ", strip=True),
         )
         if title or caption:
             meta = rebuilt.new_tag("div")
@@ -3013,7 +3170,12 @@ def should_prefer_html(
     if markdown_first and layout_strategy != "components":
         return False
 
-    if linked_images >= 6 and image_count >= 6 and paragraph_count <= 2 and heading_count <= linked_images + 1:
+    if (
+        linked_images >= 6
+        and image_count >= 6
+        and paragraph_count <= 2
+        and heading_count <= linked_images + 1
+    ):
         return True
 
     return False
@@ -3029,7 +3191,10 @@ def infer_content_presentation(
         return "standard"
 
     soup = BeautifulSoup(html, "html.parser")
-    if soup.select_one(STRUCTURED_CONTENT_SELECTOR) and layout_strategy in {"hybrid", "components"}:
+    if soup.select_one(STRUCTURED_CONTENT_SELECTOR) and layout_strategy in {
+        "hybrid",
+        "components",
+    }:
         return "immersive"
 
     return "standard"
@@ -3101,7 +3266,14 @@ def infer_background_style(raw_homepage_html: str, fidelity_mode: str) -> str:
         return "minimal"
 
     lowered = raw_homepage_html.lower()
-    if any(marker in lowered for marker in ("portfolio-grid-basic", "full-bleed-section", "background-width--full-bleed")):
+    if any(
+        marker in lowered
+        for marker in (
+            "portfolio-grid-basic",
+            "full-bleed-section",
+            "background-width--full-bleed",
+        )
+    ):
         return "plain"
 
     return "editorial"

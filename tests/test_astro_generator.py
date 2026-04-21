@@ -13,7 +13,9 @@ from s2a.normalize.models import (
 )
 
 
-def test_generate_astro_project_creates_pages_posts_and_manifest(tmp_path: Path) -> None:
+def test_generate_astro_project_creates_pages_posts_and_manifest(
+    tmp_path: Path,
+) -> None:
     snapshot_dir = tmp_path / "snapshot"
     raw_html_dir = snapshot_dir / "raw-html"
     raw_html_dir.mkdir(parents=True)
@@ -94,7 +96,9 @@ def test_generate_astro_project_creates_pages_posts_and_manifest(tmp_path: Path)
     write_json(snapshot_path, snapshot)
 
     output_dir = tmp_path / "astro-site"
-    result = generate_astro_project(snapshot_path, output_dir, site_url="https://example.com")
+    result = generate_astro_project(
+        snapshot_path, output_dir, site_url="https://example.com"
+    )
 
     assert result.pages_written == 2
     assert result.posts_written == 1
@@ -104,7 +108,9 @@ def test_generate_astro_project_creates_pages_posts_and_manifest(tmp_path: Path)
     assert (output_dir / "migration-manifest.json").exists()
 
 
-def test_generate_astro_project_uses_homepage_navigation_and_high_fidelity_chrome(tmp_path: Path) -> None:
+def test_generate_astro_project_uses_homepage_navigation_and_high_fidelity_chrome(
+    tmp_path: Path,
+) -> None:
     snapshot_dir = tmp_path / "snapshot"
     raw_html_dir = snapshot_dir / "raw-html"
     raw_html_dir.mkdir(parents=True)
@@ -333,7 +339,9 @@ def test_generate_astro_project_keeps_portfolio_routes_as_pages(tmp_path: Path) 
     write_json(snapshot_path, snapshot)
 
     output_dir = tmp_path / "astro-site"
-    result = generate_astro_project(snapshot_path, output_dir, site_url="https://example.com")
+    result = generate_astro_project(
+        snapshot_path, output_dir, site_url="https://example.com"
+    )
     manifest = read_json(output_dir / "migration-manifest.json")
 
     assert result.pages_written == 3
@@ -470,7 +478,9 @@ def test_extract_main_html_preserves_fluid_engine_styles_in_high_fidelity() -> N
     assert ".fe-block-sample" in fragment
 
 
-def test_generate_astro_project_preserves_html_for_portfolio_grid_homepage(tmp_path: Path) -> None:
+def test_generate_astro_project_preserves_html_for_portfolio_grid_homepage(
+    tmp_path: Path,
+) -> None:
     snapshot_dir = tmp_path / "snapshot"
     raw_html_dir = snapshot_dir / "raw-html"
     raw_html_dir.mkdir(parents=True)
@@ -536,7 +546,9 @@ def test_generate_astro_project_preserves_html_for_portfolio_grid_homepage(tmp_p
     assert "portfolio-grid-basic" in content
 
 
-def test_generate_astro_project_components_strategy_rebuilds_portfolio_grid(tmp_path: Path) -> None:
+def test_generate_astro_project_components_strategy_rebuilds_portfolio_grid(
+    tmp_path: Path,
+) -> None:
     snapshot_dir = tmp_path / "snapshot"
     raw_html_dir = snapshot_dir / "raw-html"
     raw_html_dir.mkdir(parents=True)
@@ -606,7 +618,9 @@ def test_generate_astro_project_components_strategy_rebuilds_portfolio_grid(tmp_
     assert "portfolio-grid-basic" not in content
 
 
-def test_generate_astro_project_high_hybrid_preserves_fluid_engine_layout_styles(tmp_path: Path) -> None:
+def test_generate_astro_project_high_hybrid_preserves_fluid_engine_layout_styles(
+    tmp_path: Path,
+) -> None:
     snapshot_dir = tmp_path / "snapshot"
     raw_html_dir = snapshot_dir / "raw-html"
     raw_html_dir.mkdir(parents=True)
@@ -694,7 +708,9 @@ def test_generate_astro_project_high_hybrid_preserves_fluid_engine_layout_styles
 
     output_dir = tmp_path / "astro-site"
     generate_astro_project(snapshot_path, output_dir, site_url="https://example.com")
-    content = (output_dir / "src/content/pages/montevideo.md").read_text(encoding="utf-8")
+    content = (output_dir / "src/content/pages/montevideo.md").read_text(
+        encoding="utf-8"
+    )
 
     assert "bodyFormat: html" in content
     assert "presentation: immersive" in content
@@ -702,7 +718,9 @@ def test_generate_astro_project_high_hybrid_preserves_fluid_engine_layout_styles
     assert "data-fluid-engine" in content
 
 
-def test_generate_astro_project_components_strategy_rebuilds_fluid_engine_page(tmp_path: Path) -> None:
+def test_generate_astro_project_components_strategy_rebuilds_fluid_engine_page(
+    tmp_path: Path,
+) -> None:
     snapshot_dir = tmp_path / "snapshot"
     raw_html_dir = snapshot_dir / "raw-html"
     raw_html_dir.mkdir(parents=True)
@@ -805,7 +823,9 @@ def test_generate_astro_project_components_strategy_rebuilds_fluid_engine_page(t
     assert "data-fluid-engine-section" not in content
 
 
-def test_generate_astro_project_components_strategy_rebuilds_classic_editor_layout(tmp_path: Path) -> None:
+def test_generate_astro_project_components_strategy_rebuilds_classic_editor_layout(
+    tmp_path: Path,
+) -> None:
     snapshot_dir = tmp_path / "snapshot"
     raw_html_dir = snapshot_dir / "raw-html"
     raw_html_dir.mkdir(parents=True)
@@ -841,7 +861,10 @@ def test_generate_astro_project_components_strategy_rebuilds_classic_editor_layo
         homepage_status_code=200,
         homepage_title="Example Site",
         probably_squarespace=True,
-        homepage_links=["https://example.com/", "https://example.com/projects/barcelona"],
+        homepage_links=[
+            "https://example.com/",
+            "https://example.com/projects/barcelona",
+        ],
     )
     snapshot = CrawlSnapshot(
         generated_at="2026-04-05T00:00:00+00:00",
@@ -882,7 +905,9 @@ def test_generate_astro_project_components_strategy_rebuilds_classic_editor_layo
         site_url="https://example.com",
         layout_strategy="components",
     )
-    content = (output_dir / "src/content/pages/projects--barcelona.md").read_text(encoding="utf-8")
+    content = (output_dir / "src/content/pages/projects--barcelona.md").read_text(
+        encoding="utf-8"
+    )
 
     assert "bodyFormat: html" in content
     assert "presentation: immersive" in content
@@ -956,7 +981,9 @@ def test_generate_astro_project_skips_utility_routes(tmp_path: Path) -> None:
     write_json(snapshot_path, snapshot)
 
     output_dir = tmp_path / "astro-site"
-    result = generate_astro_project(snapshot_path, output_dir, site_url="https://example.com")
+    result = generate_astro_project(
+        snapshot_path, output_dir, site_url="https://example.com"
+    )
     manifest = read_json(output_dir / "migration-manifest.json")
 
     assert result.pages_written == 1
@@ -966,7 +993,9 @@ def test_generate_astro_project_skips_utility_routes(tmp_path: Path) -> None:
     assert any("/cart" in warning for warning in result.warnings)
 
 
-def test_generate_astro_project_localizes_asset_urls_and_copies_downloads(tmp_path: Path) -> None:
+def test_generate_astro_project_localizes_asset_urls_and_copies_downloads(
+    tmp_path: Path,
+) -> None:
     snapshot_dir = tmp_path / "snapshot"
     raw_html_dir = snapshot_dir / "raw-html"
     raw_html_dir.mkdir(parents=True)
@@ -1094,7 +1123,9 @@ def test_generate_astro_project_localizes_asset_urls_and_copies_downloads(tmp_pa
     write_json(snapshot_path, snapshot)
 
     output_dir = tmp_path / "astro-site"
-    result = generate_astro_project(snapshot_path, output_dir, site_url="https://example.com")
+    result = generate_astro_project(
+        snapshot_path, output_dir, site_url="https://example.com"
+    )
     content = (output_dir / "src/content/pages/media.md").read_text(encoding="utf-8")
 
     assert result.pages_written == 2
@@ -1105,13 +1136,23 @@ def test_generate_astro_project_localizes_asset_urls_and_copies_downloads(tmp_pa
     assert "data:image/gif" not in content
     assert "images.squarespace-cdn.com" not in content
     assert "static1.squarespace.com" not in content
-    assert (output_dir / "public/assets/images/media-1.jpg").read_bytes() == b"hero-bytes"
-    assert (output_dir / "public/assets/files/brochure.pdf").read_bytes() == b"brochure-bytes"
-    assert (output_dir / "public/assets/images/media-2-poster.jpg").read_bytes() == b"poster-bytes"
-    assert (output_dir / "public/assets/videos/media-2.mp4").read_bytes() == b"video-bytes"
+    assert (
+        output_dir / "public/assets/images/media-1.jpg"
+    ).read_bytes() == b"hero-bytes"
+    assert (
+        output_dir / "public/assets/files/brochure.pdf"
+    ).read_bytes() == b"brochure-bytes"
+    assert (
+        output_dir / "public/assets/images/media-2-poster.jpg"
+    ).read_bytes() == b"poster-bytes"
+    assert (
+        output_dir / "public/assets/videos/media-2.mp4"
+    ).read_bytes() == b"video-bytes"
 
 
-def test_generate_astro_project_rewrites_alias_urls_to_one_canonical_asset(tmp_path: Path) -> None:
+def test_generate_astro_project_rewrites_alias_urls_to_one_canonical_asset(
+    tmp_path: Path,
+) -> None:
     snapshot_dir = tmp_path / "snapshot"
     raw_html_dir = snapshot_dir / "raw-html"
     raw_html_dir.mkdir(parents=True)
@@ -1124,11 +1165,11 @@ def test_generate_astro_project_rewrites_alias_urls_to_one_canonical_asset(tmp_p
 
     write_text(
         raw_html_dir / "index.html",
-        f"<html><body><main><img src=\"{source_url}\" alt=\"Hero A\" /></main></body></html>",
+        f'<html><body><main><img src="{source_url}" alt="Hero A" /></main></body></html>',
     )
     write_text(
         raw_html_dir / "gallery.html",
-        f"<html><body><main><img src=\"{alias_url}\" alt=\"Hero B\" /></main></body></html>",
+        f'<html><body><main><img src="{alias_url}" alt="Hero B" /></main></body></html>',
     )
     localized_file = snapshot_dir / localized_relative_path
     localized_file.parent.mkdir(parents=True, exist_ok=True)
@@ -1203,9 +1244,15 @@ def test_generate_astro_project_rewrites_alias_urls_to_one_canonical_asset(tmp_p
     write_json(snapshot_path, snapshot)
 
     output_dir = tmp_path / "astro-site"
-    result = generate_astro_project(snapshot_path, output_dir, site_url="https://example.com")
-    home_content = (output_dir / "src/content/pages/home.md").read_text(encoding="utf-8")
-    gallery_content = (output_dir / "src/content/pages/gallery.md").read_text(encoding="utf-8")
+    result = generate_astro_project(
+        snapshot_path, output_dir, site_url="https://example.com"
+    )
+    home_content = (output_dir / "src/content/pages/home.md").read_text(
+        encoding="utf-8"
+    )
+    gallery_content = (output_dir / "src/content/pages/gallery.md").read_text(
+        encoding="utf-8"
+    )
 
     assert result.pages_written == 2
     assert "/assets/images/home-1.jpg" in home_content
@@ -1214,19 +1261,23 @@ def test_generate_astro_project_rewrites_alias_urls_to_one_canonical_asset(tmp_p
     assert len(list((output_dir / "public/assets/images").iterdir())) == 1
 
 
-def test_generate_astro_project_upgrades_legacy_asset_manifest_paths(tmp_path: Path) -> None:
+def test_generate_astro_project_upgrades_legacy_asset_manifest_paths(
+    tmp_path: Path,
+) -> None:
     snapshot_dir = tmp_path / "snapshot"
     raw_html_dir = snapshot_dir / "raw-html"
     raw_html_dir.mkdir(parents=True)
 
-    legacy_relative_path = "downloaded-assets/images/still-tom-cc-large-db0f0226d1de.webp"
+    legacy_relative_path = (
+        "downloaded-assets/images/still-tom-cc-large-db0f0226d1de.webp"
+    )
     legacy_file = snapshot_dir / legacy_relative_path
     legacy_file.parent.mkdir(parents=True, exist_ok=True)
     legacy_file.write_bytes(b"legacy-image")
 
     write_text(
         raw_html_dir / "projects__be-water.html",
-        "<html><body><main><img src=\"https://images.squarespace-cdn.com/content/still-tom-cc.png?format=1000w\" alt=\"\" /></main></body></html>",
+        '<html><body><main><img src="https://images.squarespace-cdn.com/content/still-tom-cc.png?format=1000w" alt="" /></main></body></html>',
     )
 
     write_json(
@@ -1284,8 +1335,12 @@ def test_generate_astro_project_upgrades_legacy_asset_manifest_paths(tmp_path: P
     write_json(snapshot_path, snapshot)
 
     output_dir = tmp_path / "astro-site"
-    result = generate_astro_project(snapshot_path, output_dir, site_url="https://example.com")
-    content = (output_dir / "src/content/pages/projects--be-water.md").read_text(encoding="utf-8")
+    result = generate_astro_project(
+        snapshot_path, output_dir, site_url="https://example.com"
+    )
+    content = (output_dir / "src/content/pages/projects--be-water.md").read_text(
+        encoding="utf-8"
+    )
     upgraded_manifest = read_json(snapshot_dir / "asset_manifest.json")
 
     assert result.pages_written == 2
@@ -1293,13 +1348,26 @@ def test_generate_astro_project_upgrades_legacy_asset_manifest_paths(tmp_path: P
         "Upgraded legacy asset_manifest.json filenames from hash-suffixed paths to the current route-based naming scheme."
         in result.warnings
     )
-    assert result.warnings.count(
-        "Upgraded legacy asset_manifest.json filenames from hash-suffixed paths to the current route-based naming scheme."
-    ) == 1
+    assert (
+        result.warnings.count(
+            "Upgraded legacy asset_manifest.json filenames from hash-suffixed paths to the current route-based naming scheme."
+        )
+        == 1
+    )
     assert "/assets/images/be-water-1-large.webp" in content
     assert "/assets/images/still-tom-cc-large-db0f0226d1de.webp" not in content
-    assert upgraded_manifest["items"][0]["public_path"] == "/assets/images/be-water-1-large.webp"
-    assert upgraded_manifest["items"][0]["local_path"] == "downloaded-assets/images/be-water-1-large.webp"
-    assert (snapshot_dir / "downloaded-assets/images/be-water-1-large.webp").read_bytes() == b"legacy-image"
+    assert (
+        upgraded_manifest["items"][0]["public_path"]
+        == "/assets/images/be-water-1-large.webp"
+    )
+    assert (
+        upgraded_manifest["items"][0]["local_path"]
+        == "downloaded-assets/images/be-water-1-large.webp"
+    )
+    assert (
+        snapshot_dir / "downloaded-assets/images/be-water-1-large.webp"
+    ).read_bytes() == b"legacy-image"
     assert not legacy_file.exists()
-    assert (output_dir / "public/assets/images/be-water-1-large.webp").read_bytes() == b"legacy-image"
+    assert (
+        output_dir / "public/assets/images/be-water-1-large.webp"
+    ).read_bytes() == b"legacy-image"

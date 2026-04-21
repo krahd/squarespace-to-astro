@@ -9,7 +9,7 @@ def build_formula(
     macos_arm64_sha256: str,
     linux_x86_64_sha256: str,
 ) -> str:
-    return f'''class S2a < Formula
+    return f"""class S2a < Formula
   desc "Migrate Squarespace sites into Astro-ready static content"
   homepage "https://github.com/krahd/squarespace-to-astro"
   version "{version}"
@@ -81,7 +81,7 @@ def build_formula(
     assert_match "Probe, extract, and generate", shell_output("#{{bin}}/s2a --help")
   end
 end
-'''
+"""
 
 
 def main() -> int:

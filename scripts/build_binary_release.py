@@ -8,7 +8,6 @@ from pathlib import Path
 
 from s2a import __version__
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 BUILD_ROOT = PROJECT_ROOT / "build" / "binary-release"
 DIST_ROOT = BUILD_ROOT / "dist"
@@ -28,7 +27,9 @@ def main() -> None:
     bundle_root = DIST_ROOT / APP_NAME
     release_dir = RELEASE_ROOT / release_directory_name()
     shutil.copytree(bundle_root, release_dir, dirs_exist_ok=True)
-    shutil.copytree(browser_root, release_dir / "playwright-browsers", dirs_exist_ok=True)
+    shutil.copytree(
+        browser_root, release_dir / "playwright-browsers", dirs_exist_ok=True
+    )
     shutil.copy2(PROJECT_ROOT / "README.md", release_dir / "README.md")
     shutil.copy2(PROJECT_ROOT / "LICENSE", release_dir / "LICENSE")
     (release_dir / "BINARY-README.txt").write_text(binary_readme(), encoding="utf-8")
@@ -119,6 +120,7 @@ def architecture_slug() -> str:
         "aarch64": "arm64",
     }
     return aliases.get(machine, machine or "unknown")
+
 
 def binary_readme() -> str:
     executable_name = "s2a.exe" if WINDOWS else "s2a"

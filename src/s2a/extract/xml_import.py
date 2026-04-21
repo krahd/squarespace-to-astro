@@ -6,7 +6,6 @@ import xml.etree.ElementTree as ET
 
 from s2a.normalize.models import WordPressExport, WordPressItem
 
-
 NAMESPACES = {
     "content": "http://purl.org/rss/1.0/modules/content/",
     "excerpt": "http://wordpress.org/export/1.2/excerpt/",

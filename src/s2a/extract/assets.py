@@ -14,9 +14,13 @@ import httpx
 from bs4 import BeautifulSoup, Tag
 import shutil
 
-from s2a.normalize.models import AssetManifest, AssetReference, CrawlSnapshot, DownloadedAsset
+from s2a.normalize.models import (
+    AssetManifest,
+    AssetReference,
+    CrawlSnapshot,
+    DownloadedAsset,
+)
 from s2a.url_utils import make_absolute_url
-
 
 DOWNLOADABLE_FILE_SUFFIXES = {
     ".pdf",
@@ -42,7 +46,16 @@ SQUARESPACE_HOST_MARKERS = (
     "images.squarespace-cdn.com",
 )
 BACKGROUND_URL_PATTERN = re.compile(r"url\((['\"]?)(?P<url>[^)'\"]+)\1\)")
-VARIANT_KEYWORDS = ("thumb", "thumbnail", "small", "medium", "large", "xl", "xlarge", "original")
+VARIANT_KEYWORDS = (
+    "thumb",
+    "thumbnail",
+    "small",
+    "medium",
+    "large",
+    "xl",
+    "xlarge",
+    "original",
+)
 EXTENSION_OVERRIDES = {
     "image/jpeg": ".jpg",
     "image/jpg": ".jpg",
@@ -75,9 +88,7 @@ GENERIC_DESCRIPTOR_STEMS = {
 LEGACY_HASH_SUFFIX_PATTERN = re.compile(
     r"^(?P<stem>.+)-(?P<hash>[0-9a-f]{12})(?P<extension>\.[a-z0-9]+)$"
 )
-LEGACY_MANIFEST_UPGRADE_WARNING = (
-    "Upgraded legacy asset_manifest.json filenames from hash-suffixed paths to the current route-based naming scheme."
-)
+LEGACY_MANIFEST_UPGRADE_WARNING = "Upgraded legacy asset_manifest.json filenames from hash-suffixed paths to the current route-based naming scheme."
 
 ProgressCallback = Callable[[int, int, str | None], None]
 
@@ -120,7 +131,9 @@ class ManifestAssetEntry:
     legacy_hashed_filename: bool
 
 
-def extract_asset_references(soup: BeautifulSoup, base_url: str, owner_route: str) -> list[AssetReference]:
+def extract_asset_references(
+    soup: BeautifulSoup, base_url: str, owner_route: str
+) -> list[AssetReference]:
     references: list[AssetReference] = []
     seen: set[tuple[str, str, str, str | None]] = set()
 
@@ -129,7 +142,8 @@ def extract_asset_references(soup: BeautifulSoup, base_url: str, owner_route: st
 
         if tag.name == "img":
             src_attribute, src_value = preferred_attribute_value(
-                tag, "src", "data-src", "data-image")
+                tag, "src", "data-src", "data-image"
+            )
             add_reference(
                 references,
                 seen,
@@ -142,9 +156,13 @@ def extract_asset_references(soup: BeautifulSoup, base_url: str, owner_route: st
                 source_tag="img",
                 alt_text=tag.get("alt"),
                 caption=caption_for_tag(tag),
-                variant_hint=infer_variant_hint(src_value, None, "image", src_attribute or "src"),
+                variant_hint=infer_variant_hint(
+                    src_value, None, "image", src_attribute or "src"
+                ),
             )
-            srcset_attribute, srcset_value = first_present_attribute(tag, "srcset", "data-srcset")
+            srcset_attribute, srcset_value = first_present_attribute(
+                tag, "srcset", "data-srcset"
+            )
             add_srcset_references(
                 references,
                 seen,
@@ -163,7 +181,9 @@ def extract_asset_references(soup: BeautifulSoup, base_url: str, owner_route: st
             parent_name = tag.parent.name if isinstance(tag.parent, Tag) else None
             if parent_name in {"video", "audio", "picture"}:
                 asset_type = "image" if parent_name == "picture" else parent_name
-                src_attribute, src_value = preferred_attribute_value(tag, "src", "data-src")
+                src_attribute, src_value = preferred_attribute_value(
+                    tag, "src", "data-src"
+                )
                 add_reference(
                     references,
                     seen,
@@ -176,10 +196,12 @@ def extract_asset_references(soup: BeautifulSoup, base_url: str, owner_route: st
                     source_tag="source",
                     caption=caption_for_tag(tag),
                     variant_hint=infer_variant_hint(
-                        src_value, None, asset_type, src_attribute or "src"),
+                        src_value, None, asset_type, src_attribute or "src"
+                    ),
                 )
                 srcset_attribute, srcset_value = first_present_attribute(
-                    tag, "srcset", "data-srcset")
+                    tag, "srcset", "data-srcset"
+                )
                 add_srcset_references(
                     references,
                     seen,
@@ -206,9 +228,13 @@ def extract_asset_references(soup: BeautifulSoup, base_url: str, owner_route: st
                 group_key=group_key,
                 source_tag="video",
                 caption=caption_for_tag(tag),
-                variant_hint=infer_variant_hint(src_value, None, "video", src_attribute or "src"),
+                variant_hint=infer_variant_hint(
+                    src_value, None, "video", src_attribute or "src"
+                ),
             )
-            poster_attribute, poster_value = preferred_attribute_value(tag, "poster", "data-poster")
+            poster_attribute, poster_value = preferred_attribute_value(
+                tag, "poster", "data-poster"
+            )
             add_reference(
                 references,
                 seen,
@@ -236,7 +262,9 @@ def extract_asset_references(soup: BeautifulSoup, base_url: str, owner_route: st
                 group_key=group_key,
                 source_tag="audio",
                 caption=caption_for_tag(tag),
-                variant_hint=infer_variant_hint(src_value, None, "audio", src_attribute or "src"),
+                variant_hint=infer_variant_hint(
+                    src_value, None, "audio", src_attribute or "src"
+                ),
             )
 
         if tag.name == "a" and tag.get("href"):
@@ -270,7 +298,9 @@ def extract_asset_references(soup: BeautifulSoup, base_url: str, owner_route: st
                     group_key=group_key,
                     source_tag=tag.name,
                     caption=caption_for_tag(tag),
-                    variant_hint=infer_variant_hint(background_url, None, "image", "style"),
+                    variant_hint=infer_variant_hint(
+                        background_url, None, "image", "style"
+                    ),
                 )
 
     return references
@@ -322,7 +352,9 @@ def estimate_asset_download(
         if size_bytes is None:
             unknown_size_count += 1
             if warning:
-                warnings.append(f"Could not estimate size for asset {asset.source_url}: {warning}")
+                warnings.append(
+                    f"Could not estimate size for asset {asset.source_url}: {warning}"
+                )
         else:
             estimated_size_bytes += size_bytes
 
@@ -347,8 +379,11 @@ def download_snapshot_assets(
 ) -> AssetManifest:
     warnings: list[str] = []
     resolved_assets: list[ResolvedAssetDownload] = []
-    assets = estimate.assets if estimate is not None else collect_unique_squarespace_assets(
-        snapshot)
+    assets = (
+        estimate.assets
+        if estimate is not None
+        else collect_unique_squarespace_assets(snapshot)
+    )
     total_assets = len(assets)
 
     if progress_callback is not None:
@@ -415,10 +450,12 @@ def download_snapshot_assets(
         )
         if representative.asset.asset_type == "file":
             sequence = route_group_sequence(
-                file_group_indices, route_label, representative.asset.group_key)
+                file_group_indices, route_label, representative.asset.group_key
+            )
         else:
             sequence = route_group_sequence(
-                media_group_indices, route_label, representative.asset.group_key)
+                media_group_indices, route_label, representative.asset.group_key
+            )
 
         filename = uniquify_download_filename(
             representative.asset_subdir,
@@ -431,13 +468,18 @@ def download_snapshot_assets(
             used_relative_paths,
             disambiguators=filename_collision_disambiguators(representative),
         )
-        local_relative_path = Path("downloaded-assets") / representative.asset_subdir / filename
+        local_relative_path = (
+            Path("downloaded-assets") / representative.asset_subdir / filename
+        )
         public_relative_path = Path("assets") / representative.asset_subdir / filename
         full_path = output_dir / local_relative_path
         full_path.parent.mkdir(parents=True, exist_ok=True)
         # Move the temporary file into place when available, otherwise write in-memory content.
         try:
-            if representative.temp_path is not None and representative.temp_path.exists():
+            if (
+                representative.temp_path is not None
+                and representative.temp_path.exists()
+            ):
                 try:
                     representative.temp_path.replace(full_path)
                 except OSError:
@@ -455,7 +497,14 @@ def download_snapshot_assets(
         for entry in group:
             try:
                 temp = entry.temp_path
-                if temp and temp.exists() and (representative.temp_path is None or temp != representative.temp_path):
+                if (
+                    temp
+                    and temp.exists()
+                    and (
+                        representative.temp_path is None
+                        or temp != representative.temp_path
+                    )
+                ):
                     temp.unlink(missing_ok=True)
             except Exception:
                 # Best-effort cleanup; ignore errors.
@@ -464,7 +513,14 @@ def download_snapshot_assets(
         for entry in group:
             try:
                 temp = entry.temp_path
-                if temp and temp.exists() and (representative.temp_path is None or temp != representative.temp_path):
+                if (
+                    temp
+                    and temp.exists()
+                    and (
+                        representative.temp_path is None
+                        or temp != representative.temp_path
+                    )
+                ):
                     temp.unlink(missing_ok=True)
             except Exception:
                 # Best-effort cleanup; ignore errors.
@@ -486,9 +542,12 @@ def download_snapshot_assets(
             caption=representative.asset.caption,
             link_text=representative.asset.link_text,
             variant_hint=representative.asset.variant_hint,
-            alias_source_urls=[url for url in source_urls if url !=
-                               representative.asset.source_url],
-            alias_final_urls=[url for url in final_urls if url != representative.final_url],
+            alias_source_urls=[
+                url for url in source_urls if url != representative.asset.source_url
+            ],
+            alias_final_urls=[
+                url for url in final_urls if url != representative.final_url
+            ],
             deduplicated_from_count=len(group),
         )
         items.append(item)
@@ -504,7 +563,9 @@ def download_snapshot_assets(
     )
 
 
-def upgrade_legacy_asset_manifest(snapshot_root: Path, asset_manifest: dict) -> tuple[dict, list[str], bool]:
+def upgrade_legacy_asset_manifest(
+    snapshot_root: Path, asset_manifest: dict
+) -> tuple[dict, list[str], bool]:
     items = asset_manifest.get("items")
     cleaned_warnings = [
         warning
@@ -567,7 +628,9 @@ def upgrade_legacy_asset_manifest(snapshot_root: Path, asset_manifest: dict) -> 
             used_relative_paths,
             disambiguators=filename_collision_disambiguators(representative),
         )
-        local_relative_path = Path("downloaded-assets") / representative.asset_subdir / filename
+        local_relative_path = (
+            Path("downloaded-assets") / representative.asset_subdir / filename
+        )
         public_path = f"/assets/{representative.asset_subdir}/{filename}"
 
         old_relative_paths = [entry.local_relative_path for entry in group]
@@ -584,7 +647,9 @@ def upgrade_legacy_asset_manifest(snapshot_root: Path, asset_manifest: dict) -> 
             expected_sha256=representative.sha256,
             public_path=public_path,
         )
-        cleanup_duplicate_manifest_asset_files(snapshot_root, old_relative_paths, target_path)
+        cleanup_duplicate_manifest_asset_files(
+            snapshot_root, old_relative_paths, target_path
+        )
 
         merged_item = dict(representative_entry.item)
         source_urls = sorted(
@@ -593,7 +658,11 @@ def upgrade_legacy_asset_manifest(snapshot_root: Path, asset_manifest: dict) -> 
                 for entry in group
                 for url in [
                     str(entry.item.get("source_url") or ""),
-                    *[str(value) for value in entry.item.get("alias_source_urls", []) if value],
+                    *[
+                        str(value)
+                        for value in entry.item.get("alias_source_urls", [])
+                        if value
+                    ],
                 ]
                 if url
             }
@@ -603,8 +672,16 @@ def upgrade_legacy_asset_manifest(snapshot_root: Path, asset_manifest: dict) -> 
                 url
                 for entry in group
                 for url in [
-                    str(entry.item.get("final_url") or entry.item.get("source_url") or ""),
-                    *[str(value) for value in entry.item.get("alias_final_urls", []) if value],
+                    str(
+                        entry.item.get("final_url")
+                        or entry.item.get("source_url")
+                        or ""
+                    ),
+                    *[
+                        str(value)
+                        for value in entry.item.get("alias_final_urls", [])
+                        if value
+                    ],
                 ]
                 if url
             }
@@ -615,18 +692,29 @@ def upgrade_legacy_asset_manifest(snapshot_root: Path, asset_manifest: dict) -> 
             public_path=public_path,
             source_url=representative.asset.source_url,
             final_url=representative.final_url,
-            alias_source_urls=[url for url in source_urls if url !=
-                               representative.asset.source_url],
-            alias_final_urls=[url for url in final_urls if url != representative.final_url],
-            deduplicated_from_count=sum(manifest_item_source_count(entry.item) for entry in group),
+            alias_source_urls=[
+                url for url in source_urls if url != representative.asset.source_url
+            ],
+            alias_final_urls=[
+                url for url in final_urls if url != representative.final_url
+            ],
+            deduplicated_from_count=sum(
+                manifest_item_source_count(entry.item) for entry in group
+            ),
             canonical_id=representative.sha256,
             sha256=representative.sha256,
         )
         upgraded_items.append(merged_item)
 
-    upgraded_items.sort(key=lambda item: (
-        str(item.get("public_path") or ""), str(item.get("source_url") or "")))
-    source_asset_count = sum(manifest_item_source_count(item) for item in upgraded_items)
+    upgraded_items.sort(
+        key=lambda item: (
+            str(item.get("public_path") or ""),
+            str(item.get("source_url") or ""),
+        )
+    )
+    source_asset_count = sum(
+        manifest_item_source_count(item) for item in upgraded_items
+    )
     upgraded_manifest = dict(asset_manifest)
     upgraded_manifest.update(
         generated_at=datetime.now(UTC).isoformat(),
@@ -639,7 +727,9 @@ def upgrade_legacy_asset_manifest(snapshot_root: Path, asset_manifest: dict) -> 
     return upgraded_manifest, [LEGACY_MANIFEST_UPGRADE_WARNING], True
 
 
-def estimate_asset_size_bytes(client: httpx.Client, source_url: str) -> tuple[int | None, str | None]:
+def estimate_asset_size_bytes(
+    client: httpx.Client, source_url: str
+) -> tuple[int | None, str | None]:
     last_error: str | None = None
 
     try:
@@ -655,7 +745,9 @@ def estimate_asset_size_bytes(client: httpx.Client, source_url: str) -> tuple[in
     try:
         with client.stream("GET", source_url) as response:
             response.raise_for_status()
-            content_length = parse_content_length(response.headers.get("content-length"))
+            content_length = parse_content_length(
+                response.headers.get("content-length")
+            )
             if content_length is not None:
                 return content_length, None
     except httpx.HTTPError as exc:
@@ -764,7 +856,9 @@ def caption_for_tag(tag: Tag) -> str | None:
     return text or None
 
 
-def preferred_attribute_value(tag: Tag, *attributes: str) -> tuple[str | None, str | None]:
+def preferred_attribute_value(
+    tag: Tag, *attributes: str
+) -> tuple[str | None, str | None]:
     fallback: tuple[str, str] | None = None
 
     for attribute in attributes:
@@ -781,7 +875,9 @@ def preferred_attribute_value(tag: Tag, *attributes: str) -> tuple[str | None, s
     return fallback
 
 
-def first_present_attribute(tag: Tag, *attributes: str) -> tuple[str | None, str | None]:
+def first_present_attribute(
+    tag: Tag, *attributes: str
+) -> tuple[str | None, str | None]:
     for attribute in attributes:
         value = tag.get(attribute)
         if value:
@@ -815,7 +911,9 @@ def parse_srcset(value: str | None) -> list[tuple[str, str | None]]:
 
 
 def extract_background_urls(style_value: str) -> list[str]:
-    return [match.group("url") for match in BACKGROUND_URL_PATTERN.finditer(style_value)]
+    return [
+        match.group("url") for match in BACKGROUND_URL_PATTERN.finditer(style_value)
+    ]
 
 
 def is_downloadable_asset_url(url: str) -> bool:
@@ -933,7 +1031,9 @@ def manifest_item_subdir(item: dict, local_relative_path: Path | None) -> str:
     return asset_subdirectory(str(item.get("asset_type") or "asset"))
 
 
-def manifest_item_extension(_item: dict, filename: str, content_type: str | None, source_url: str) -> str:
+def manifest_item_extension(
+    _item: dict, filename: str, content_type: str | None, source_url: str
+) -> str:
     extension = Path(filename).suffix
     if extension:
         return normalize_extension(extension)
@@ -958,17 +1058,24 @@ def is_legacy_manifest_filename(item: dict, filename: str) -> bool:
     return bool(canonical_hash) and canonical_hash.startswith(match.group("hash"))
 
 
-def group_manifest_asset_entries(entries: list[ManifestAssetEntry]) -> list[list[ManifestAssetEntry]]:
+def group_manifest_asset_entries(
+    entries: list[ManifestAssetEntry],
+) -> list[list[ManifestAssetEntry]]:
     groups: dict[tuple[str, str], list[ManifestAssetEntry]] = {}
     for entry in entries:
-        sha256 = entry.resolved.sha256 or entry.item.get(
-            "canonical_id") or entry.local_relative_path.as_posix()
+        sha256 = (
+            entry.resolved.sha256
+            or entry.item.get("canonical_id")
+            or entry.local_relative_path.as_posix()
+        )
         key = (entry.resolved.asset_subdir, str(sha256))
         groups.setdefault(key, []).append(entry)
     return list(groups.values())
 
 
-def manifest_group_sort_key(group: list[ManifestAssetEntry]) -> tuple[tuple[str, ...], tuple[str, int, str], int, str, str]:
+def manifest_group_sort_key(
+    group: list[ManifestAssetEntry],
+) -> tuple[tuple[str, ...], tuple[str, int, str], int, str, str]:
     return download_group_sort_key([entry.resolved for entry in group])
 
 
@@ -1018,7 +1125,9 @@ def move_manifest_asset_file(
     source_path.replace(target_path)
 
 
-def cleanup_duplicate_manifest_asset_files(snapshot_root: Path, local_relative_paths: list[Path], target_path: Path) -> None:
+def cleanup_duplicate_manifest_asset_files(
+    snapshot_root: Path, local_relative_paths: list[Path], target_path: Path
+) -> None:
     for relative_path in local_relative_paths:
         candidate = snapshot_root / relative_path
         if candidate == target_path:
@@ -1035,11 +1144,15 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def representative_for_group(group: list[ResolvedAssetDownload]) -> ResolvedAssetDownload:
+def representative_for_group(
+    group: list[ResolvedAssetDownload],
+) -> ResolvedAssetDownload:
     return min(group, key=canonical_asset_sort_key)
 
 
-def download_group_sort_key(group: list[ResolvedAssetDownload]) -> tuple[tuple[str, ...], tuple[str, int, str], int, str, str]:
+def download_group_sort_key(
+    group: list[ResolvedAssetDownload],
+) -> tuple[tuple[str, ...], tuple[str, int, str], int, str, str]:
     representative = representative_for_group(group)
     return (
         route_sort_key(representative.asset.owner_route),
@@ -1050,7 +1163,9 @@ def download_group_sort_key(group: list[ResolvedAssetDownload]) -> tuple[tuple[s
     )
 
 
-def canonical_asset_sort_key(resolved: ResolvedAssetDownload) -> tuple[bool, str, str, str, str, str, str]:
+def canonical_asset_sort_key(
+    resolved: ResolvedAssetDownload,
+) -> tuple[bool, str, str, str, str, str, str]:
     descriptor = asset_descriptor_stem(resolved.asset)
     variant = canonical_variant_hint(resolved.asset)
     route = slugify_fragment(resolved.asset.owner_route.strip("/") or "home")
@@ -1066,7 +1181,9 @@ def canonical_asset_sort_key(resolved: ResolvedAssetDownload) -> tuple[bool, str
     )
 
 
-def build_download_filename(asset: AssetReference, extension: str, route_label: str, sequence: int) -> str:
+def build_download_filename(
+    asset: AssetReference, extension: str, route_label: str, sequence: int
+) -> str:
     if asset.asset_type == "file":
         stem = asset_descriptor_stem(asset)
         if is_generic_descriptor_stem(stem):
@@ -1134,7 +1251,11 @@ def filename_collision_disambiguators(resolved: ResolvedAssetDownload) -> list[s
             disambiguators.append(token)
 
     descriptor = asset_descriptor_stem(resolved.asset)
-    if descriptor and not is_generic_descriptor_stem(descriptor) and descriptor not in disambiguators:
+    if (
+        descriptor
+        and not is_generic_descriptor_stem(descriptor)
+        and descriptor not in disambiguators
+    ):
         disambiguators.append(descriptor)
 
     return disambiguators
@@ -1202,7 +1323,7 @@ def build_route_label_lookup(owner_routes: Iterable[str]) -> dict[str, str]:
 
     while True:
         labels = {
-            route: "-".join(segment_lookup[route][-suffix_widths[route]:])
+            route: "-".join(segment_lookup[route][-suffix_widths[route] :])
             for route in unique_routes
         }
         collisions: dict[str, list[str]] = {}
@@ -1213,8 +1334,11 @@ def build_route_label_lookup(owner_routes: Iterable[str]) -> dict[str, str]:
         for routes in collisions.values():
             if len(routes) < 2:
                 continue
-            expandable = [route for route in routes if suffix_widths[route]
-                          < len(segment_lookup[route])]
+            expandable = [
+                route
+                for route in routes
+                if suffix_widths[route] < len(segment_lookup[route])
+            ]
             if not expandable:
                 continue
             for route in expandable:
@@ -1226,8 +1350,11 @@ def build_route_label_lookup(owner_routes: Iterable[str]) -> dict[str, str]:
 
 
 def route_label_segments(owner_route: str) -> list[str]:
-    segments = [slugify_fragment(part)
-                for part in owner_route.strip("/").split("/") if part.strip()]
+    segments = [
+        slugify_fragment(part)
+        for part in owner_route.strip("/").split("/")
+        if part.strip()
+    ]
     return segments or ["home"]
 
 
@@ -1274,7 +1401,11 @@ def extension_for_asset(url: str, content_type: str | None) -> str:
     if path.suffix:
         return normalize_extension(path.suffix)
 
-    guessed = mimetypes.guess_extension(lowered_content_type) if lowered_content_type else None
+    guessed = (
+        mimetypes.guess_extension(lowered_content_type)
+        if lowered_content_type
+        else None
+    )
     return normalize_extension(guessed or ".bin")
 
 

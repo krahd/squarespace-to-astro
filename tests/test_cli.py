@@ -3,7 +3,15 @@ from pathlib import Path
 
 import s2a.cli as cli
 from s2a.extract.assets import AssetDownloadEstimate
-from s2a.normalize.models import AstroGenerationResult, AssetManifest, AssetReference, AuthCaptureReport, CrawlReport, CrawlSnapshot, SiteProbe
+from s2a.normalize.models import (
+    AstroGenerationResult,
+    AssetManifest,
+    AssetReference,
+    AuthCaptureReport,
+    CrawlReport,
+    CrawlSnapshot,
+    SiteProbe,
+)
 
 
 def make_auth_namespace(
@@ -144,12 +152,14 @@ def test_auth_browser_main_uses_resolved_env_credentials(monkeypatch, tmp_path) 
 
     monkeypatch.setattr(cli, "capture_storage_state", fake_capture_storage_state)
 
-    result = cli.main([
-        "auth-browser",
-        "https://example.com",
-        "--output-dir",
-        str(tmp_path),
-    ])
+    result = cli.main(
+        [
+            "auth-browser",
+            "https://example.com",
+            "--output-dir",
+            str(tmp_path),
+        ]
+    )
 
     assert result == 0
     assert calls["username"] == "env@example.com"
@@ -173,19 +183,23 @@ def test_auth_browser_main_passes_insecure_flag(monkeypatch, tmp_path) -> None:
 
     monkeypatch.setattr(cli, "capture_storage_state", fake_capture_storage_state)
 
-    result = cli.main([
-        "auth-browser",
-        "https://example.com",
-        "--output-dir",
-        str(tmp_path),
-        "--insecure",
-    ])
+    result = cli.main(
+        [
+            "auth-browser",
+            "https://example.com",
+            "--output-dir",
+            str(tmp_path),
+            "--insecure",
+        ]
+    )
 
     assert result == 0
     assert calls["insecure"] is True
 
 
-def test_prepare_storage_state_skips_capture_with_only_env_credentials(monkeypatch, tmp_path) -> None:
+def test_prepare_storage_state_skips_capture_with_only_env_credentials(
+    monkeypatch, tmp_path
+) -> None:
     monkeypatch.setenv("SQUARESPACE_USER", "env@example.com")
     monkeypatch.setenv("SQUARESPACE_PWD", "env-password")
 
@@ -199,7 +213,9 @@ def test_prepare_storage_state_skips_capture_with_only_env_credentials(monkeypat
     assert cli.prepare_storage_state(args, tmp_path) is None
 
 
-def test_prepare_storage_state_uses_env_credentials_when_auth_is_explicit(monkeypatch, tmp_path) -> None:
+def test_prepare_storage_state_uses_env_credentials_when_auth_is_explicit(
+    monkeypatch, tmp_path
+) -> None:
     monkeypatch.setenv("SQUARESPACE_USER", "env@example.com")
     monkeypatch.setenv("SQUARESPACE_PWD", "env-password")
     calls: dict[str, object] = {}
@@ -227,7 +243,9 @@ def test_prepare_storage_state_uses_env_credentials_when_auth_is_explicit(monkey
     assert result == tmp_path / "auth/storage_state.json"
 
 
-def test_prepare_storage_state_skips_capture_without_auth_inputs(monkeypatch, tmp_path) -> None:
+def test_prepare_storage_state_skips_capture_without_auth_inputs(
+    monkeypatch, tmp_path
+) -> None:
     monkeypatch.delenv("SQUARESPACE_USER", raising=False)
     monkeypatch.delenv("SQUARESPACE_PWD", raising=False)
 
@@ -244,7 +262,9 @@ def test_prepare_storage_state_skips_capture_without_auth_inputs(monkeypatch, tm
 def test_resolve_output_dir_uses_unique_site_output_by_default(monkeypatch) -> None:
     monkeypatch.setattr(cli, "output_dir_timestamp", lambda: "20260405-123456")
 
-    args = make_auth_namespace(command="crawl", output_dir=None, target="https://Example.com/blog")
+    args = make_auth_namespace(
+        command="crawl", output_dir=None, target="https://Example.com/blog"
+    )
 
     assert cli.resolve_output_dir(args) == (
         Path("site-output/20260405-123456-crawl-example-com"),
@@ -293,20 +313,24 @@ def test_build_parser_accepts_yes_and_quiet_flags_for_all_commands() -> None:
 def test_build_parser_accepts_fidelity_flags_for_generate_astro_and_migrate() -> None:
     parser = cli.build_parser()
 
-    generate_args = parser.parse_args([
-        "generate-astro",
-        "site_snapshot.json",
-        "--fidelity-mode",
-        "balanced",
-        "--layout-strategy",
-        "components",
-        "--markdown",
-    ])
-    migrate_args = parser.parse_args([
-        "migrate",
-        "https://example.com",
-        "--choose-layout-strategy",
-    ])
+    generate_args = parser.parse_args(
+        [
+            "generate-astro",
+            "site_snapshot.json",
+            "--fidelity-mode",
+            "balanced",
+            "--layout-strategy",
+            "components",
+            "--markdown",
+        ]
+    )
+    migrate_args = parser.parse_args(
+        [
+            "migrate",
+            "https://example.com",
+            "--choose-layout-strategy",
+        ]
+    )
 
     assert generate_args.fidelity_mode == "balanced"
     assert generate_args.layout_strategy == "components"
@@ -324,14 +348,18 @@ def test_resolve_generation_options_prompts_for_layout_strategy(monkeypatch) -> 
     )
     monkeypatch.setattr("builtins.input", lambda prompt: "2")
 
-    fidelity_mode, layout_strategy, markdown_first = cli.resolve_generation_options(console, args)
+    fidelity_mode, layout_strategy, markdown_first = cli.resolve_generation_options(
+        console, args
+    )
 
     assert fidelity_mode == "high"
     assert layout_strategy == "components"
     assert markdown_first is False
 
 
-def test_generate_astro_main_passes_fidelity_settings_to_generator(monkeypatch, tmp_path) -> None:
+def test_generate_astro_main_passes_fidelity_settings_to_generator(
+    monkeypatch, tmp_path
+) -> None:
     captured: dict[str, object] = {}
 
     def fake_generate_astro_project(*, snapshot_path, output_dir, **kwargs):
@@ -349,17 +377,19 @@ def test_generate_astro_main_passes_fidelity_settings_to_generator(monkeypatch, 
 
     monkeypatch.setattr(cli, "generate_astro_project", fake_generate_astro_project)
 
-    result = cli.main([
-        "generate-astro",
-        "site_snapshot.json",
-        "--output-dir",
-        str(tmp_path),
-        "--fidelity-mode",
-        "balanced",
-        "--layout-strategy",
-        "components",
-        "--markdown",
-    ])
+    result = cli.main(
+        [
+            "generate-astro",
+            "site_snapshot.json",
+            "--output-dir",
+            str(tmp_path),
+            "--fidelity-mode",
+            "balanced",
+            "--layout-strategy",
+            "components",
+            "--markdown",
+        ]
+    )
 
     assert result == 0
     assert captured["fidelity_mode"] == "balanced"
@@ -370,29 +400,42 @@ def test_generate_astro_main_passes_fidelity_settings_to_generator(monkeypatch, 
 def test_crawl_main_skips_confirmation_prompt_with_yes(monkeypatch, tmp_path) -> None:
     calls = {"download": 0}
 
-    monkeypatch.setattr(cli, "build_client", lambda *args, **kwargs: DummyClientContext())
+    monkeypatch.setattr(
+        cli, "build_client", lambda *args, **kwargs: DummyClientContext()
+    )
     monkeypatch.setattr(cli, "prepare_storage_state", lambda *args, **kwargs: None)
     monkeypatch.setattr(cli, "probe_site", lambda *args, **kwargs: make_probe())
     monkeypatch.setattr(cli, "crawl_site", lambda *args, **kwargs: make_snapshot())
     monkeypatch.setattr(cli, "build_report", lambda *args, **kwargs: make_report())
-    monkeypatch.setattr(cli, "estimate_snapshot_asset_download",
-                        lambda *args, **kwargs: make_asset_estimate())
+    monkeypatch.setattr(
+        cli,
+        "estimate_snapshot_asset_download",
+        lambda *args, **kwargs: make_asset_estimate(),
+    )
 
-    def fake_download_snapshot_assets(_client, _snapshot, _output_dir, **_kwargs) -> AssetManifest:
+    def fake_download_snapshot_assets(
+        _client, _snapshot, _output_dir, **_kwargs
+    ) -> AssetManifest:
         calls["download"] += 1
         return AssetManifest(generated_at="2026-04-05T00:00:00+00:00")
 
     monkeypatch.setattr(cli, "download_snapshot_assets", fake_download_snapshot_assets)
-    monkeypatch.setattr("builtins.input", lambda prompt: (
-        _ for _ in ()).throw(AssertionError("input should not be called")))
+    monkeypatch.setattr(
+        "builtins.input",
+        lambda prompt: (_ for _ in ()).throw(
+            AssertionError("input should not be called")
+        ),
+    )
 
-    result = cli.main([
-        "crawl",
-        "https://example.com",
-        "--output-dir",
-        str(tmp_path),
-        "--yes",
-    ])
+    result = cli.main(
+        [
+            "crawl",
+            "https://example.com",
+            "--output-dir",
+            str(tmp_path),
+            "--yes",
+        ]
+    )
 
     assert result == 0
     assert calls["download"] == 1
@@ -401,45 +444,63 @@ def test_crawl_main_skips_confirmation_prompt_with_yes(monkeypatch, tmp_path) ->
 def test_crawl_main_can_skip_asset_download_after_prompt(monkeypatch, tmp_path) -> None:
     calls = {"download": 0}
 
-    monkeypatch.setattr(cli, "build_client", lambda *args, **kwargs: DummyClientContext())
+    monkeypatch.setattr(
+        cli, "build_client", lambda *args, **kwargs: DummyClientContext()
+    )
     monkeypatch.setattr(cli, "prepare_storage_state", lambda *args, **kwargs: None)
     monkeypatch.setattr(cli, "probe_site", lambda *args, **kwargs: make_probe())
     monkeypatch.setattr(cli, "crawl_site", lambda *args, **kwargs: make_snapshot())
     monkeypatch.setattr(cli, "build_report", lambda *args, **kwargs: make_report())
-    monkeypatch.setattr(cli, "estimate_snapshot_asset_download",
-                        lambda *args, **kwargs: make_asset_estimate())
+    monkeypatch.setattr(
+        cli,
+        "estimate_snapshot_asset_download",
+        lambda *args, **kwargs: make_asset_estimate(),
+    )
 
-    def fake_download_snapshot_assets(_client, _snapshot, _output_dir, **_kwargs) -> AssetManifest:
+    def fake_download_snapshot_assets(
+        _client, _snapshot, _output_dir, **_kwargs
+    ) -> AssetManifest:
         calls["download"] += 1
         return AssetManifest(generated_at="2026-04-05T00:00:00+00:00")
 
     monkeypatch.setattr(cli, "download_snapshot_assets", fake_download_snapshot_assets)
     monkeypatch.setattr("builtins.input", lambda prompt: "n")
 
-    result = cli.main([
-        "crawl",
-        "https://example.com",
-        "--output-dir",
-        str(tmp_path),
-    ])
+    result = cli.main(
+        [
+            "crawl",
+            "https://example.com",
+            "--output-dir",
+            str(tmp_path),
+        ]
+    )
 
     assert result == 0
     assert calls["download"] == 0
     assert (tmp_path / "asset_manifest.json").exists()
 
 
-def test_migrate_main_can_skip_asset_download_and_exit_zero(monkeypatch, tmp_path) -> None:
+def test_migrate_main_can_skip_asset_download_and_exit_zero(
+    monkeypatch, tmp_path
+) -> None:
     calls = {"download": 0, "astro": 0}
 
-    monkeypatch.setattr(cli, "build_client", lambda *args, **kwargs: DummyClientContext())
+    monkeypatch.setattr(
+        cli, "build_client", lambda *args, **kwargs: DummyClientContext()
+    )
     monkeypatch.setattr(cli, "prepare_storage_state", lambda *args, **kwargs: None)
     monkeypatch.setattr(cli, "probe_site", lambda *args, **kwargs: make_probe())
     monkeypatch.setattr(cli, "crawl_site", lambda *args, **kwargs: make_snapshot())
     monkeypatch.setattr(cli, "build_report", lambda *args, **kwargs: make_report())
-    monkeypatch.setattr(cli, "estimate_snapshot_asset_download",
-                        lambda *args, **kwargs: make_asset_estimate())
+    monkeypatch.setattr(
+        cli,
+        "estimate_snapshot_asset_download",
+        lambda *args, **kwargs: make_asset_estimate(),
+    )
 
-    def fake_download_snapshot_assets(_client, _snapshot, _output_dir, **_kwargs) -> AssetManifest:
+    def fake_download_snapshot_assets(
+        _client, _snapshot, _output_dir, **_kwargs
+    ) -> AssetManifest:
         calls["download"] += 1
         return AssetManifest(generated_at="2026-04-05T00:00:00+00:00")
 
@@ -451,12 +512,14 @@ def test_migrate_main_can_skip_asset_download_and_exit_zero(monkeypatch, tmp_pat
     monkeypatch.setattr(cli, "generate_astro_project", fake_generate_astro_project)
     monkeypatch.setattr("builtins.input", lambda prompt: "n")
 
-    result = cli.main([
-        "migrate",
-        "https://example.com",
-        "--output-dir",
-        str(tmp_path),
-    ])
+    result = cli.main(
+        [
+            "migrate",
+            "https://example.com",
+            "--output-dir",
+            str(tmp_path),
+        ]
+    )
 
     assert result == 0
     assert calls["download"] == 0
@@ -464,18 +527,24 @@ def test_migrate_main_can_skip_asset_download_and_exit_zero(monkeypatch, tmp_pat
     assert (tmp_path / "asset_manifest.json").exists()
 
 
-def test_probe_main_quiet_suppresses_summary_output(monkeypatch, tmp_path, capsys) -> None:
-    monkeypatch.setattr(cli, "build_client", lambda *args, **kwargs: DummyClientContext())
+def test_probe_main_quiet_suppresses_summary_output(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    monkeypatch.setattr(
+        cli, "build_client", lambda *args, **kwargs: DummyClientContext()
+    )
     monkeypatch.setattr(cli, "prepare_storage_state", lambda *args, **kwargs: None)
     monkeypatch.setattr(cli, "probe_site", lambda *args, **kwargs: make_probe())
 
-    result = cli.main([
-        "probe",
-        "https://example.com",
-        "--output-dir",
-        str(tmp_path),
-        "--quiet",
-    ])
+    result = cli.main(
+        [
+            "probe",
+            "https://example.com",
+            "--output-dir",
+            str(tmp_path),
+            "--quiet",
+        ]
+    )
 
     captured = capsys.readouterr()
 

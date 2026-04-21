@@ -18,7 +18,9 @@ from s2a.url_utils import (
 )
 
 
-def probe_site(client: httpx.Client, target_url: str, max_sitemap_urls: int = 200) -> SiteProbe:
+def probe_site(
+    client: httpx.Client, target_url: str, max_sitemap_urls: int = 200
+) -> SiteProbe:
     target_url = coerce_url(target_url)
     home_fetch = fetch_text(client, target_url)
     final_home_url = home_fetch.final_url or target_url
@@ -40,22 +42,33 @@ def probe_site(client: httpx.Client, target_url: str, max_sitemap_urls: int = 20
     if home_fetch.text and is_html_content_type(home_fetch.content_type):
         soup = BeautifulSoup(home_fetch.text, "html.parser")
         squarespace_indicators = detect_squarespace_indicators(
-            home_fetch.text, home_fetch.headers, soup)
+            home_fetch.text, home_fetch.headers, soup
+        )
         version_hint = detect_version_hint(home_fetch.text)
         password_gate_detected = detect_password_gate(soup)
-        homepage_title = soup.title.string.strip() if soup.title and soup.title.string else None
+        homepage_title = (
+            soup.title.string.strip() if soup.title and soup.title.string else None
+        )
         homepage_links = extract_internal_links(soup, final_home_url, site_origin)
         rss_feeds = extract_rss_feeds(soup, final_home_url)
     elif home_fetch.text:
-        warnings.append("Homepage did not appear to be HTML; extraction signals may be incomplete.")
+        warnings.append(
+            "Homepage did not appear to be HTML; extraction signals may be incomplete."
+        )
 
     json_probe, _ = probe_json_data(client, final_home_url)
-    robots_url, robots_status_code, robots_disallow_all, robots_sitemaps, robots_warnings = fetch_robots(
-        client, site_origin
-    )
+    (
+        robots_url,
+        robots_status_code,
+        robots_disallow_all,
+        robots_sitemaps,
+        robots_warnings,
+    ) = fetch_robots(client, site_origin)
     warnings.extend(robots_warnings)
 
-    sitemap_url = robots_sitemaps[0] if robots_sitemaps else f"{site_origin}/sitemap.xml"
+    sitemap_url = (
+        robots_sitemaps[0] if robots_sitemaps else f"{site_origin}/sitemap.xml"
+    )
     sitemap_status_code, sitemap_entries, sitemap_warnings = fetch_sitemap_urls(
         client, sitemap_url, max_urls=max_sitemap_urls
     )
@@ -63,11 +76,14 @@ def probe_site(client: httpx.Client, target_url: str, max_sitemap_urls: int = 20
 
     probably_squarespace = bool(squarespace_indicators)
     if not probably_squarespace:
-        warnings.append("Squarespace markers were not strongly detected on the homepage.")
+        warnings.append(
+            "Squarespace markers were not strongly detected on the homepage."
+        )
 
     if version_hint is None and probably_squarespace:
         warnings.append(
-            "Squarespace was detected, but the site version could not be inferred reliably.")
+            "Squarespace was detected, but the site version could not be inferred reliably."
+        )
 
     return SiteProbe(
         target_url=target_url,
@@ -103,7 +119,10 @@ def detect_squarespace_indicators(
     if generator and "squarespace" in generator.get("content", "").lower():
         indicators.append("meta-generator")
 
-    if "static1.squarespace.com" in lowered_html or "static.squarespace.com" in lowered_html:
+    if (
+        "static1.squarespace.com" in lowered_html
+        or "static.squarespace.com" in lowered_html
+    ):
         indicators.append("static-assets")
 
     if "squarespace-cdn.com" in lowered_html:
@@ -144,7 +163,9 @@ def detect_password_gate(soup: BeautifulSoup) -> bool:
     return bool(password_inputs)
 
 
-def extract_internal_links(soup: BeautifulSoup, base_url: str, site_origin: str) -> list[str]:
+def extract_internal_links(
+    soup: BeautifulSoup, base_url: str, site_origin: str
+) -> list[str]:
     discovered: list[str] = []
 
     for anchor in soup.find_all("a", href=True):
@@ -194,7 +215,13 @@ def fetch_robots(
         elif lowered.startswith("sitemap:"):
             sitemaps.append(line.split(":", 1)[1].strip())
 
-    return robots_url, fetch.status_code, disallow_all, list(dict.fromkeys(sitemaps)), warnings
+    return (
+        robots_url,
+        fetch.status_code,
+        disallow_all,
+        list(dict.fromkeys(sitemaps)),
+        warnings,
+    )
 
 
 def fetch_sitemap_urls(
@@ -242,7 +269,9 @@ def fetch_sitemap_urls(
             continue
 
         if tag_name != "urlset":
-            warnings.append(f"Unexpected sitemap root element '{tag_name}' from {current_url}.")
+            warnings.append(
+                f"Unexpected sitemap root element '{tag_name}' from {current_url}."
+            )
             continue
 
         locations = [

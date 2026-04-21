@@ -3,9 +3,21 @@ from pathlib import Path
 import httpx
 from bs4 import BeautifulSoup
 
-from s2a.extract.assets import download_snapshot_assets, estimate_snapshot_asset_download, extract_asset_references, upgrade_legacy_asset_manifest
+from s2a.extract.assets import (
+    download_snapshot_assets,
+    estimate_snapshot_asset_download,
+    extract_asset_references,
+    upgrade_legacy_asset_manifest,
+)
 from s2a.files import read_json, write_json
-from s2a.normalize.models import AssetManifest, AssetReference, CrawlSnapshot, DownloadedAsset, PageSnapshot, SiteProbe
+from s2a.normalize.models import (
+    AssetManifest,
+    AssetReference,
+    CrawlSnapshot,
+    DownloadedAsset,
+    PageSnapshot,
+    SiteProbe,
+)
 
 
 def test_extract_asset_references_discovers_media_files_and_backgrounds() -> None:
@@ -37,21 +49,29 @@ def test_extract_asset_references_discovers_media_files_and_backgrounds() -> Non
     )
 
     by_url_and_attribute = {
-        (reference.source_url, reference.attribute): reference for reference in references
+        (reference.source_url, reference.attribute): reference
+        for reference in references
     }
 
-    hero_reference = by_url_and_attribute[("https://example.com/images/hero.jpg?w=300", "src")]
-    hero_small_reference = by_url_and_attribute[(
-        "https://example.com/images/hero.jpg?w=300", "srcset")]
-    hero_large_reference = by_url_and_attribute[(
-        "https://example.com/images/hero.jpg?w=1200", "srcset")]
-    poster_reference = by_url_and_attribute[(
-        "https://images.squarespace-cdn.com/content/poster.jpg", "poster")]
-    video_reference = by_url_and_attribute[(
-        "https://static1.squarespace.com/media/clip.mp4", "src")]
+    hero_reference = by_url_and_attribute[
+        ("https://example.com/images/hero.jpg?w=300", "src")
+    ]
+    hero_small_reference = by_url_and_attribute[
+        ("https://example.com/images/hero.jpg?w=300", "srcset")
+    ]
+    hero_large_reference = by_url_and_attribute[
+        ("https://example.com/images/hero.jpg?w=1200", "srcset")
+    ]
+    poster_reference = by_url_and_attribute[
+        ("https://images.squarespace-cdn.com/content/poster.jpg", "poster")
+    ]
+    video_reference = by_url_and_attribute[
+        ("https://static1.squarespace.com/media/clip.mp4", "src")
+    ]
     file_reference = by_url_and_attribute[("https://example.com/s/guide.pdf", "href")]
-    background_reference = by_url_and_attribute[(
-        "https://example.com/images/background.jpg?width=1200", "style")]
+    background_reference = by_url_and_attribute[
+        ("https://example.com/images/background.jpg?width=1200", "style")
+    ]
 
     assert hero_reference.asset_type == "image"
     assert hero_reference.caption == "Hero caption"
@@ -87,28 +107,37 @@ def test_extract_asset_references_prefers_lazy_loaded_media_attributes() -> None
     )
 
     by_url_and_attribute = {
-        (reference.source_url, reference.attribute): reference for reference in references
+        (reference.source_url, reference.attribute): reference
+        for reference in references
     }
 
-    lazy_src_reference = by_url_and_attribute[(
-        "https://images.squarespace-cdn.com/content/lazy-hero.jpg",
-        "data-src",
-    )]
-    lazy_small_reference = by_url_and_attribute[(
-        "https://images.squarespace-cdn.com/content/lazy-hero.jpg?w=400",
-        "data-srcset",
-    )]
-    lazy_large_reference = by_url_and_attribute[(
-        "https://images.squarespace-cdn.com/content/lazy-hero.jpg?w=1400",
-        "data-srcset",
-    )]
+    lazy_src_reference = by_url_and_attribute[
+        (
+            "https://images.squarespace-cdn.com/content/lazy-hero.jpg",
+            "data-src",
+        )
+    ]
+    lazy_small_reference = by_url_and_attribute[
+        (
+            "https://images.squarespace-cdn.com/content/lazy-hero.jpg?w=400",
+            "data-srcset",
+        )
+    ]
+    lazy_large_reference = by_url_and_attribute[
+        (
+            "https://images.squarespace-cdn.com/content/lazy-hero.jpg?w=1400",
+            "data-srcset",
+        )
+    ]
 
     assert lazy_src_reference.alt_text == "Lazy hero"
     assert lazy_small_reference.variant_hint == "small"
     assert lazy_large_reference.variant_hint == "large"
 
 
-def test_download_snapshot_assets_downloads_squarespace_assets_with_friendly_names(tmp_path: Path) -> None:
+def test_download_snapshot_assets_downloads_squarespace_assets_with_friendly_names(
+    tmp_path: Path,
+) -> None:
     snapshot = CrawlSnapshot(
         generated_at="2026-04-05T00:00:00+00:00",
         target_url="https://example.com/",
@@ -189,7 +218,8 @@ def test_download_snapshot_assets_downloads_squarespace_assets_with_friendly_nam
             snapshot,
             tmp_path,
             progress_callback=lambda completed, total, detail: progress_updates.append(
-                (completed, total, detail)),
+                (completed, total, detail)
+            ),
         )
 
     assert [item.public_path for item in manifest.items] == [
@@ -200,11 +230,17 @@ def test_download_snapshot_assets_downloads_squarespace_assets_with_friendly_nam
     assert manifest.source_asset_count == 2
     assert manifest.deduplicated_asset_count == 0
     assert progress_updates == [(0, 2, None), (1, 2, None), (2, 2, None)]
-    assert (tmp_path / "downloaded-assets/images/media-1-small.jpg").read_bytes() == b"image-bytes"
-    assert (tmp_path / "downloaded-assets/files/pricing-guide.pdf").read_bytes() == b"%PDF-1.7"
+    assert (
+        tmp_path / "downloaded-assets/images/media-1-small.jpg"
+    ).read_bytes() == b"image-bytes"
+    assert (
+        tmp_path / "downloaded-assets/files/pricing-guide.pdf"
+    ).read_bytes() == b"%PDF-1.7"
 
 
-def test_download_snapshot_assets_merges_same_content_from_different_urls(tmp_path: Path) -> None:
+def test_download_snapshot_assets_merges_same_content_from_different_urls(
+    tmp_path: Path,
+) -> None:
     snapshot = CrawlSnapshot(
         generated_at="2026-04-05T00:00:00+00:00",
         target_url="https://example.com/",
@@ -288,10 +324,14 @@ def test_download_snapshot_assets_merges_same_content_from_different_urls(tmp_pa
         "https://images.squarespace-cdn.com/content/hero-b.jpg"
     ]
     assert manifest.items[0].deduplicated_from_count == 2
-    assert (tmp_path / "downloaded-assets/images/media-1.jpg").read_bytes() == shared_bytes
+    assert (
+        tmp_path / "downloaded-assets/images/media-1.jpg"
+    ).read_bytes() == shared_bytes
 
 
-def test_download_snapshot_assets_uses_route_labels_for_generic_cdn_image_names(tmp_path: Path) -> None:
+def test_download_snapshot_assets_uses_route_labels_for_generic_cdn_image_names(
+    tmp_path: Path,
+) -> None:
     snapshot = CrawlSnapshot(
         generated_at="2026-04-05T00:00:00+00:00",
         target_url="https://example.com/",
@@ -361,7 +401,9 @@ def test_download_snapshot_assets_uses_route_labels_for_generic_cdn_image_names(
     ]
 
 
-def test_download_snapshot_assets_uses_width_tokens_before_numeric_collision_suffixes(tmp_path: Path) -> None:
+def test_download_snapshot_assets_uses_width_tokens_before_numeric_collision_suffixes(
+    tmp_path: Path,
+) -> None:
     snapshot = CrawlSnapshot(
         generated_at="2026-04-05T00:00:00+00:00",
         target_url="https://example.com/",
@@ -433,7 +475,9 @@ def test_download_snapshot_assets_uses_width_tokens_before_numeric_collision_suf
     ]
 
 
-def test_download_snapshot_assets_expands_route_labels_when_page_suffixes_collide(tmp_path: Path) -> None:
+def test_download_snapshot_assets_expands_route_labels_when_page_suffixes_collide(
+    tmp_path: Path,
+) -> None:
     snapshot = CrawlSnapshot(
         generated_at="2026-04-05T00:00:00+00:00",
         target_url="https://example.com/",
@@ -514,9 +558,15 @@ def test_download_snapshot_assets_expands_route_labels_when_page_suffixes_collid
     ]
 
 
-def test_upgrade_legacy_asset_manifest_renames_hashed_assets_and_merges_duplicates(tmp_path: Path) -> None:
-    first_relative_path = "downloaded-assets/images/still-tom-cc-large-db0f0226d1de.webp"
-    duplicate_relative_path = "downloaded-assets/images/be-water-large-db0f0226d1de.webp"
+def test_upgrade_legacy_asset_manifest_renames_hashed_assets_and_merges_duplicates(
+    tmp_path: Path,
+) -> None:
+    first_relative_path = (
+        "downloaded-assets/images/still-tom-cc-large-db0f0226d1de.webp"
+    )
+    duplicate_relative_path = (
+        "downloaded-assets/images/be-water-large-db0f0226d1de.webp"
+    )
     first_file = tmp_path / first_relative_path
     duplicate_file = tmp_path / duplicate_relative_path
     first_file.parent.mkdir(parents=True, exist_ok=True)
@@ -579,12 +629,16 @@ def test_upgrade_legacy_asset_manifest_renames_hashed_assets_and_merges_duplicat
         "https://images.squarespace-cdn.com/content/still-tom-cc.png?format=1000w",
         "https://images.squarespace-cdn.com/content/be-water-duplicate.png?format=1000w",
     }
-    assert (tmp_path / "downloaded-assets/images/be-water-1-large.webp").read_bytes() == b"shared-image"
+    assert (
+        tmp_path / "downloaded-assets/images/be-water-1-large.webp"
+    ).read_bytes() == b"shared-image"
     assert not first_file.exists()
     assert not duplicate_file.exists()
 
 
-def test_estimate_snapshot_asset_download_uses_unique_squarespace_assets_and_tracks_unknown_sizes() -> None:
+def test_estimate_snapshot_asset_download_uses_unique_squarespace_assets_and_tracks_unknown_sizes() -> (
+    None
+):
     snapshot = CrawlSnapshot(
         generated_at="2026-04-05T00:00:00+00:00",
         target_url="https://example.com/",
@@ -638,11 +692,23 @@ def test_estimate_snapshot_asset_download_uses_unique_squarespace_assets_and_tra
     )
 
     def handler(request: httpx.Request) -> httpx.Response:
-        if request.method == "HEAD" and str(request.url) == "https://images.squarespace-cdn.com/content/hero.jpg?w=300":
+        if (
+            request.method == "HEAD"
+            and str(request.url)
+            == "https://images.squarespace-cdn.com/content/hero.jpg?w=300"
+        ):
             return httpx.Response(200, headers={"content-length": str(3 * 1024 * 1024)})
-        if request.method == "HEAD" and str(request.url) == "https://static1.squarespace.com/files/pricing-guide.pdf":
+        if (
+            request.method == "HEAD"
+            and str(request.url)
+            == "https://static1.squarespace.com/files/pricing-guide.pdf"
+        ):
             return httpx.Response(200, headers={})
-        if request.method == "GET" and str(request.url) == "https://static1.squarespace.com/files/pricing-guide.pdf":
+        if (
+            request.method == "GET"
+            and str(request.url)
+            == "https://static1.squarespace.com/files/pricing-guide.pdf"
+        ):
             return httpx.Response(200, headers={})
         raise AssertionError(f"Unexpected {request.method} request for {request.url}")
 
@@ -653,7 +719,8 @@ def test_estimate_snapshot_asset_download_uses_unique_squarespace_assets_and_tra
             client,
             snapshot,
             progress_callback=lambda completed, total, detail: progress_updates.append(
-                (completed, total, detail)),
+                (completed, total, detail)
+            ),
         )
 
     assert estimate.asset_count == 2

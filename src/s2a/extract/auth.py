@@ -12,7 +12,6 @@ from s2a.normalize.models import AuthCaptureReport
 from s2a.runtime import configure_bundled_playwright_environment
 from s2a.url_utils import coerce_url
 
-
 DEFAULT_USERNAME_SELECTOR = "input[type='email'], input[name='email'], input[name='username'], input[name='login']"
 DEFAULT_PASSWORD_SELECTOR = "input[type='password']"
 DEFAULT_SUBMIT_SELECTOR = "button[type='submit'], input[type='submit'], button"
@@ -46,11 +45,15 @@ def capture_storage_state(
 
     if manual and headless:
         headless = False
-        warnings.append("Manual auth requires a visible browser, so headless mode was disabled.")
+        warnings.append(
+            "Manual auth requires a visible browser, so headless mode was disabled."
+        )
     if manual and not sys.stdin.isatty():
         raise RuntimeError("Manual auth requires an interactive terminal (tty).")
     if insecure:
-        warnings.append("TLS certificate verification was disabled for browser auth capture.")
+        warnings.append(
+            "TLS certificate verification was disabled for browser auth capture."
+        )
 
     auth_dir = output_dir / "auth"
     auth_dir.mkdir(parents=True, exist_ok=True)
@@ -66,7 +69,9 @@ def capture_storage_state(
             try:
                 page.goto(login_url, wait_until="domcontentloaded", timeout=30_000)
             except PlaywrightError as exc:
-                rewritten_error = _rewrite_navigation_error(exc, login_url, insecure=insecure)
+                rewritten_error = _rewrite_navigation_error(
+                    exc, login_url, insecure=insecure
+                )
                 if rewritten_error is not None:
                     raise rewritten_error from exc
                 raise
@@ -94,13 +99,16 @@ def capture_storage_state(
                 click_submit(page)
 
             if manual:
-                input("Complete the login flow in the browser, then press Enter to save storage state... ")
+                input(
+                    "Complete the login flow in the browser, then press Enter to save storage state... "
+                )
 
             try:
                 page.wait_for_load_state("networkidle", timeout=10_000)
             except PlaywrightTimeoutError:
                 warnings.append(
-                    "Browser auth capture timed out waiting for a fully idle page, but storage state was still saved.")
+                    "Browser auth capture timed out waiting for a fully idle page, but storage state was still saved."
+                )
 
             context.storage_state(path=str(storage_state_path))
             try:

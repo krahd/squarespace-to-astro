@@ -16,12 +16,16 @@ def test_homepage_heavy_fixture(tmp_path: Path) -> None:
     snapshot_path = snapshot_dir / "site_snapshot.json"
     output_dir = tmp_path / "astro-site"
 
-    result = generate_astro_project(snapshot_path, output_dir, site_url="https://example.com")
+    result = generate_astro_project(
+        snapshot_path, output_dir, site_url="https://example.com"
+    )
 
     # Expect pages for home/about/contact
     assert result.pages_written >= 2
     assert (output_dir / "src/content/pages/home.md").exists()
-    assert (output_dir / "src/content/pages/about.md") or (output_dir / "src/content/pages/about.md")
+    assert (output_dir / "src/content/pages/about.md") or (
+        output_dir / "src/content/pages/about.md"
+    )
 
 
 def test_mixed_pages_posts_fixture(tmp_path: Path) -> None:
@@ -29,7 +33,9 @@ def test_mixed_pages_posts_fixture(tmp_path: Path) -> None:
     snapshot_path = snapshot_dir / "site_snapshot.json"
     output_dir = tmp_path / "astro-site"
 
-    result = generate_astro_project(snapshot_path, output_dir, site_url="https://example.org")
+    result = generate_astro_project(
+        snapshot_path, output_dir, site_url="https://example.org"
+    )
 
     # Expect at least one post and pages
     assert result.posts_written >= 1 or result.pages_written >= 2
@@ -42,7 +48,9 @@ def test_laurnenzo_asset_verify_fixture(tmp_path: Path) -> None:
     snapshot_path = snapshot_dir / "site_snapshot.json"
     output_dir = tmp_path / "astro-site"
 
-    result = generate_astro_project(snapshot_path, output_dir, site_url="https://laurenzo.net")
+    result = generate_astro_project(
+        snapshot_path, output_dir, site_url="https://laurenzo.net"
+    )
 
     # Expect pages and migration manifest
     assert result.pages_written >= 2
@@ -55,7 +63,9 @@ def test_laurnenzo_site_fixture(tmp_path: Path) -> None:
     snapshot_path = snapshot_dir / "site_snapshot.json"
     output_dir = tmp_path / "astro-site"
 
-    result = generate_astro_project(snapshot_path, output_dir, site_url="https://laurenzo.net")
+    result = generate_astro_project(
+        snapshot_path, output_dir, site_url="https://laurenzo.net"
+    )
 
     assert result.pages_written >= 1
     assert (output_dir / "src/content/pages/home.md").exists()

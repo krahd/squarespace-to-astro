@@ -6,7 +6,6 @@ import httpx
 
 from s2a import __version__
 
-
 DEFAULT_HEADERS = {
     "User-Agent": f"squarespace-to-astro/{__version__} (+https://github.com/krahd/squarespace-to-astro)"
 }
@@ -58,11 +57,18 @@ def fetch_text(client: httpx.Client, url: str) -> TextFetch:
 def is_html_content_type(content_type: str | None) -> bool:
     if not content_type:
         return True
-    return "text/html" in content_type.lower() or "application/xhtml+xml" in content_type.lower()
+    return (
+        "text/html" in content_type.lower()
+        or "application/xhtml+xml" in content_type.lower()
+    )
 
 
 def is_json_content_type(content_type: str | None) -> bool:
     if not content_type:
         return False
     lowered = content_type.lower()
-    return "application/json" in lowered or lowered.endswith("+json") or "text/json" in lowered
+    return (
+        "application/json" in lowered
+        or lowered.endswith("+json")
+        or "text/json" in lowered
+    )

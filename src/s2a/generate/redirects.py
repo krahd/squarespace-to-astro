@@ -23,12 +23,14 @@ def build_redirects_from_manifest(manifest: dict) -> list[dict]:
         parsed = urlsplit(source)
         source_path = parsed.path or "/"
         target = item.get("route_path") or "/"
-        redirects.append({
-            "source_url": source,
-            "source_path": source_path,
-            "target": target,
-            "type": "post" if item.get("published_at") else "page",
-        })
+        redirects.append(
+            {
+                "source_url": source,
+                "source_path": source_path,
+                "target": target,
+                "type": "post" if item.get("published_at") else "page",
+            }
+        )
 
     return redirects
 

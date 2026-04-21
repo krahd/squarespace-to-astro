@@ -37,8 +37,11 @@ def test_build_generated_sites() -> None:
         for lf in lockfiles:
             if (d / lf).exists():
                 # prefer `npm ci` for npm lockfiles, otherwise use `npm install`
-                install_cmd = ["npm", "ci"] if lf in (
-                    "package-lock.json", "npm-shrinkwrap.json") else ["npm", "install"]
+                install_cmd = (
+                    ["npm", "ci"]
+                    if lf in ("package-lock.json", "npm-shrinkwrap.json")
+                    else ["npm", "install"]
+                )
                 break
 
         if install_cmd is None:
@@ -47,7 +50,9 @@ def test_build_generated_sites() -> None:
         try:
             subprocess.check_call(install_cmd, cwd=str(d))
         except subprocess.CalledProcessError:
-            pytest.skip(f"Dependency install failed for {d}; skipping on this environment")
+            pytest.skip(
+                f"Dependency install failed for {d}; skipping on this environment"
+            )
 
         # prefer explicit build script, allow project to be no-op
         try:

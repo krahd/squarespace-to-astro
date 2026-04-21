@@ -14,7 +14,9 @@ def build_json_data_url(url: str) -> str:
     return with_query_param(url, "format", "json-pretty")
 
 
-def probe_json_data(client: httpx.Client, url: str) -> tuple[JsonDataProbe, dict[str, Any] | None]:
+def probe_json_data(
+    client: httpx.Client, url: str
+) -> tuple[JsonDataProbe, dict[str, Any] | None]:
     json_url = build_json_data_url(url)
     fetch = fetch_text(client, json_url)
 
@@ -46,7 +48,9 @@ def probe_json_data(client: httpx.Client, url: str) -> tuple[JsonDataProbe, dict
             None,
         )
 
-    if not is_json_content_type(fetch.content_type) and not fetch.text.lstrip().startswith("{"):
+    if not is_json_content_type(
+        fetch.content_type
+    ) and not fetch.text.lstrip().startswith("{"):
         return (
             JsonDataProbe(
                 source_url=url,

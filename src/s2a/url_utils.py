@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
-
 NON_HTML_SUFFIXES = {
     ".jpg",
     ".jpeg",
@@ -59,7 +58,10 @@ def canonicalize_page_url(url: str) -> str:
 def same_origin(left: str, right: str) -> bool:
     left_parts = urlsplit(coerce_url(left))
     right_parts = urlsplit(coerce_url(right))
-    return (left_parts.scheme, left_parts.netloc) == (right_parts.scheme, right_parts.netloc)
+    return (left_parts.scheme, left_parts.netloc) == (
+        right_parts.scheme,
+        right_parts.netloc,
+    )
 
 
 def make_absolute_url(base_url: str, candidate: str) -> str:
