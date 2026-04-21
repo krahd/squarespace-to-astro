@@ -34,12 +34,23 @@ jobs:
           . .venv/bin/activate
           pytest -q
 
+      - name: Detect generated projects
+        id: detect
+        run: |
+          if [ -d generated ] && [ -n "$(ls -A generated)" ]; then
+            echo "has_generated=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_generated=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Install Playwright browsers
+        if: steps.detect.outputs.has_generated == 'true'
         run: |
           . .venv/bin/activate
           python -m playwright install chromium
 
       - name: Build generated Astro projects (if present)
+        if: steps.detect.outputs.has_generated == 'true'
         run: |
           set -e
           for d in generated/*; do
@@ -54,6 +65,7 @@ jobs:
           done
 
       - name: Smoke-test built generated sites
+        if: steps.detect.outputs.has_generated == 'true'
         run: |
           set -e
           # For each generated project that produced a `dist/` directory,
