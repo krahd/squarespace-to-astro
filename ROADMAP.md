@@ -64,7 +64,7 @@ Before the CLI should be treated as a stable general-purpose migration path, the
 
 These areas matter, but they are larger workstreams and should not be assumed to be covered by the current migration pipeline.
 
-- redirect generation is not implemented yet
+- redirect generation implemented in v0.5.2; further improvements to redirect-planning output are planned
 - commerce data and checkout flows are not migrated
 - forms and form submissions are not migrated
 - events are not migrated

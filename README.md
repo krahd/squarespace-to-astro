@@ -2,7 +2,7 @@
 
 `s2a` is a Python CLI for extracting content from Squarespace and generating an editable [Astro](https://github.com/withastro/astro) project. This README is the repository entry point for developers, contributors, and advanced users who want to run the project from source or understand how the codebase is organized.
 
-Current release: `v0.5.1`.
+Current release: `v0.5.2`.
 
 For end-user installation and day-to-day usage:
 
@@ -33,7 +33,7 @@ The current implementation supports these main workflows:
 Current boundaries:
 
 - full Squarespace admin automation is not implemented
-- redirect generation is still pending
+- redirect generation implemented (use the `--emit-redirects` flag to write redirect mappings as JSON and a Netlify `_redirects` file)
 - commerce, events, forms, and members migration are not implemented
 
 ## Supported interfaces

@@ -39,7 +39,7 @@ If you need to run s2a from source instead of using Homebrew or the standalone b
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install "git+https://github.com/krahd/squarespace-to-astro.git@v0.5.1"
+pip install "git+https://github.com/krahd/squarespace-to-astro.git@v0.5.2"
 python -m playwright install chromium
 ```
 
@@ -195,6 +195,8 @@ s2a generate-astro ./site-output/example/site_snapshot.json \
   --fidelity-mode high \
   --layout-strategy hybrid \
   --markdown
+
+To emit redirect mappings for the generated site (a `redirects.json` and a Netlify `_redirects` file), pass `--emit-redirects` to `generate-astro` and the generator will write the files into the output directory alongside the generated site.
 ```
 
 Generation controls:

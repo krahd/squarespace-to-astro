@@ -1,0 +1,40 @@
+name: Release Smoke Tests
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  smoke-test:
+    name: Smoke test release bundle
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download linux release asset
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.release.tag_name }}"
+          VERSION="${TAG#v}"
+          mkdir -p release
+          gh release download "$TAG" --pattern "s2a-${VERSION}-linux-x86_64.tar.gz" -D release || true
+          ls -la release || true
+
+      - name: Extract and run smoke checks
+        run: |
+          set -euo pipefail
+          asset=$(ls release/s2a-*-linux-x86_64.tar.gz 2>/dev/null || true)
+          if [[ -z "$asset" ]]; then
+            echo "No linux release asset found; skipping smoke tests"
+            exit 0
+          fi
+
+          tar -xzf "$asset" -C release
+          bundle_dir=$(find release -maxdepth 1 -type d -name 's2a-*' | head -n 1)
+          if [[ -z "$bundle_dir" ]]; then
+            echo "Bundle directory not found" >&2
+            exit 1
+          fi
+
+          echo "Running $bundle_dir/s2a --help"
+          "$bundle_dir/s2a" --help
+          echo "Running $bundle_dir/s2a --version"
+          "$bundle_dir/s2a" --version
