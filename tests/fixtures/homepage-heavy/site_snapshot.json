@@ -1,0 +1,50 @@
+{
+  "generated_at": "2026-04-05T00:00:00+00:00",
+  "target_url": "https://example.com/",
+  "base_url": "https://example.com/",
+  "probe": {
+    "target_url": "https://example.com/",
+    "final_home_url": "https://example.com/",
+    "site_origin": "https://example.com",
+    "homepage_status_code": 200,
+    "homepage_title": "Homepage Heavy",
+    "probably_squarespace": true,
+    "homepage_links": [
+      "https://example.com/",
+      "https://example.com/about",
+      "https://example.com/contact"
+    ]
+  },
+  "pages": [
+    {
+      "requested_url": "https://example.com/",
+      "final_url": "https://example.com/",
+      "status_code": 200,
+      "content_type": "text/html",
+      "title": "Landing — Homepage Heavy",
+      "meta_description": "Landing page",
+      "canonical_url": "https://example.com/",
+      "raw_html_path": "raw-html/index.html"
+    },
+    {
+      "requested_url": "https://example.com/about",
+      "final_url": "https://example.com/about",
+      "status_code": 200,
+      "content_type": "text/html",
+      "title": "About — Homepage Heavy",
+      "meta_description": "About page",
+      "canonical_url": "https://example.com/about",
+      "raw_html_path": "raw-html/about.html"
+    },
+    {
+      "requested_url": "https://example.com/contact",
+      "final_url": "https://example.com/contact",
+      "status_code": 200,
+      "content_type": "text/html",
+      "title": "Contact — Homepage Heavy",
+      "meta_description": "Contact page",
+      "canonical_url": "https://example.com/contact",
+      "raw_html_path": "raw-html/contact.html"
+    }
+  ]
+}

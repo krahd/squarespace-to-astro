@@ -1,0 +1,50 @@
+{
+  "generated_at": "2026-04-05T00:00:00+00:00",
+  "target_url": "https://example.org/",
+  "base_url": "https://example.org/",
+  "probe": {
+    "target_url": "https://example.org/",
+    "final_home_url": "https://example.org/",
+    "site_origin": "https://example.org",
+    "homepage_status_code": 200,
+    "homepage_title": "Mixed Pages and Posts",
+    "probably_squarespace": true,
+    "homepage_links": [
+      "https://example.org/",
+      "https://example.org/blog/first-post",
+      "https://example.org/about"
+    ]
+  },
+  "pages": [
+    {
+      "requested_url": "https://example.org/",
+      "final_url": "https://example.org/",
+      "status_code": 200,
+      "content_type": "text/html",
+      "title": "Home — Mixed",
+      "meta_description": "Home",
+      "canonical_url": "https://example.org/",
+      "raw_html_path": "raw-html/index.html"
+    },
+    {
+      "requested_url": "https://example.org/blog/first-post",
+      "final_url": "https://example.org/blog/first-post",
+      "status_code": 200,
+      "content_type": "text/html",
+      "title": "First Post — Mixed",
+      "meta_description": "First post",
+      "canonical_url": "https://example.org/blog/first-post",
+      "raw_html_path": "raw-html/blog__first-post.html"
+    },
+    {
+      "requested_url": "https://example.org/about",
+      "final_url": "https://example.org/about",
+      "status_code": 200,
+      "content_type": "text/html",
+      "title": "About — Mixed",
+      "meta_description": "About page",
+      "canonical_url": "https://example.org/about",
+      "raw_html_path": "raw-html/about.html"
+    }
+  ]
+}
