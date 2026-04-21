@@ -95,6 +95,19 @@ After a release is published, confirm:
 - `brew tap krahd/tap && brew install krahd/tap/s2a` works on a supported platform
 - the project website and documentation still match the released behavior
 
+## PyPI publication
+
+[.github/workflows/publish-pypi.yml](.github/workflows/publish-pypi.yml) provides an optional path to publish the Python package to PyPI when a release is published or when manually dispatched. Notes:
+
+- The workflow runs on the `release` event (type `published`) and supports `workflow_dispatch` for manual runs.
+- The workflow expects an Actions repository secret named `PYPI_API_TOKEN` containing a PyPI API token. If the token is missing the publish step will skip automatically and exit successfully.
+- For simple `push` events that modify the workflow file, a lightweight `validate` job runs to avoid zero-job failed runs; the actual publish job runs only for release events or manual dispatch. See the workflow file for details about the runtime token check and guard behavior.
+- Before publishing to PyPI, ensure `PYPI_API_TOKEN` is configured in the repository's Secrets (Settings → Secrets → Actions) and that the token has the appropriate PyPI scope.
+
+## Post-release verification (additional PyPI checks)
+
+- Confirm the package was uploaded to PyPI by checking the package index and the release's source distribution files. Optionally run `pip index versions squarespace-to-astro` to see the published versions.
+
 ## Roll-forward approach
 
 If a release needs correction, prefer publishing a new version rather than mutating documented release history or relying on manual drift between the repository and the tap.
