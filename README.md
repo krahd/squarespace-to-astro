@@ -104,7 +104,7 @@ Usage examples and end-user task flows live in [USER_GUIDE.md](USER_GUIDE.md). T
 
 ## Distribution
 
-This project currently ships in three ways. The current release is `v0.5.1`.
+This project currently ships in three ways. The current release is `v0.5.2`.
 
 - standalone binary bundles attached to GitHub Releases
 - a Homebrew formula published through `krahd/homebrew-tap`

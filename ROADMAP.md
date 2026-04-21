@@ -16,6 +16,22 @@ The project already provides a usable end-to-end migration pipeline for many pub
 - localized media now use readable route-based filenames, deduplicate identical bytes across pages, and automatically upgrade older hash-suffixed snapshot manifests during generation.
 - release tooling already covers standalone bundles, Homebrew publication, and the project documentation site.
 
+## Status (2026-04-20)
+
+Recent progress on the `0.5.x` line (summarized):
+
+- Released `v0.5.2` with these notable updates: streaming asset downloads, redirect generation and the `--emit-redirects` CLI flag, and filesystem permission hardening for captured auth artifacts.
+- Native standalone bundles for macOS arm64 and Linux x86_64 were produced and attached to the `v0.5.2` GitHub Release; a Homebrew formula update for `krahd/homebrew-tap` was rendered and pushed.
+- CI: a smoke-test workflow and additional test harnesses were added to exercise generated fixtures in CI.
+- Tests & fixtures: representative trimmed fixtures (including `laurenzo-site` and `laurenzo-site-asset-verify`) and integration tests were added under `tests/fixtures/` to improve real-world coverage.
+
+Remaining high-priority items:
+
+- Publish the package to PyPI (requires a PyPI API token and a small workflow addition to the release pipeline).
+- Expand fixture coverage and add generated-Astro smoke-tests that validate preview/`npm run dev` behavior on representative fixtures.
+- Continue improving redirect-planning output and migration reporting to make follow-up tasks and route review easier for end users.
+
+
 ## Toward 1.0
 
 Before the CLI should be treated as a stable general-purpose migration path, these areas need more work.
