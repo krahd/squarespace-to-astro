@@ -22,10 +22,26 @@ jobs:
         with:
           node-version: '18'
 
+      - name: Cache npm
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
+
+      - name: Cache pip
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
       - name: Install Python dev dependencies
         shell: bash
@@ -56,6 +72,12 @@ jobs:
         run: |
           . .venv/bin/activate
           python -m playwright install chromium
+      - name: Cache Playwright browsers
+        if: steps.detect.outputs.has_generated == 'true'
+        uses: actions/cache@v3
+        with:
+          path: .playwright-browsers
+          key: ${{ runner.os }}-playwright-browsers-v1
 
       - name: Build generated Astro projects (if present)
         if: steps.detect.outputs.has_generated == 'true'
