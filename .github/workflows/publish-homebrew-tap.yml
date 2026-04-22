@@ -40,6 +40,24 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Ensure GH CLI and jq
+        shell: bash
+        run: |
+          if ! command -v gh >/dev/null 2>&1; then
+            if [ "$(uname)" = "Darwin" ]; then
+              brew install gh || true
+            else
+              sudo apt-get update && sudo apt-get install -y gh || true
+            fi
+          fi
+          if ! command -v jq >/dev/null 2>&1; then
+            if [ "$(uname)" = "Darwin" ]; then
+              brew install jq || true
+            else
+              sudo apt-get update && sudo apt-get install -y jq || true
+            fi
+          fi
+
       - name: Resolve release metadata
         env:
           GH_TOKEN: ${{ github.token }}
