@@ -7,6 +7,10 @@ The format is based on Keep a Changelog, and this project uses semantic versioni
 ## [Unreleased]
 ## [Unreleased]
 
+### Unreleased
+
+- Add workflow: optional `publish-pypi` workflow to publish the package to PyPI on release or by manual dispatch. The workflow expects an Actions secret named `PYPI_API_TOKEN`; when missing, the publish step is skipped automatically.
+
 ## [0.5.2] - 2026-04-20
 
 ### Added in 0.5.2

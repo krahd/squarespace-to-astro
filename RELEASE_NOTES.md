@@ -43,6 +43,13 @@ git tag -a v0.5.2 -m "Release v0.5.2"
 git push origin v0.5.2
 ```
 
+PyPI publish workflow
+--------------------
+
+- The repository adds an optional `.github/workflows/publish-pypi.yml` workflow that can publish the package to PyPI on release or by manual dispatch. The workflow checks for an Actions secret `PYPI_API_TOKEN` and will skip the publish step if the token is not configured.
+
+To publish via the workflow manually, set the secret and use `workflow_dispatch` in the Actions UI, or create a GitHub Release to trigger the release workflow.
+
 Notable files changed
 ---------------------
 
