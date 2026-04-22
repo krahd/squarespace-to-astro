@@ -1,11 +1,15 @@
 import shutil
 from pathlib import Path
 
+import pytest
+
 from s2a.generate.astro import generate_astro_project
 
 
 def copy_fixture(name: str, tmp_path: Path) -> Path:
     src = Path(__file__).parent / "fixtures" / name
+    if not src.exists():
+        pytest.skip(f"Fixture '{name}' not present in this checkout")
     dst = tmp_path / "snapshot"
     shutil.copytree(src, dst)
     return dst
