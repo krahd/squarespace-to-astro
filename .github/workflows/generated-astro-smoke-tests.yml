@@ -25,7 +25,7 @@ jobs:
           node-version: '18'
 
       - name: Cache npm
-        uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
         with:
           path: ~/.npm
           key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
@@ -38,7 +38,7 @@ jobs:
           python-version: '3.11'
 
       - name: Cache pip
-        uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
@@ -76,7 +76,7 @@ jobs:
           python -m playwright install chromium
       - name: Cache Playwright browsers
         if: steps.detect.outputs.has_generated == 'true'
-        uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
         with:
           path: .playwright-browsers
           key: ${{ runner.os }}-playwright-browsers-v1
