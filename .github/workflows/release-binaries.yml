@@ -34,14 +34,14 @@ jobs:
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
     steps:
       - name: Check out release ref
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ env.RELEASE_TAG }}
           fetch-depth: 0
           persist-credentials: false
 
       - name: Cache pip
-        uses: actions/cache@v3
+        uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
@@ -49,13 +49,13 @@ jobs:
             ${{ runner.os }}-pip-
 
       - name: Cache Playwright browsers
-        uses: actions/cache@v3
+        uses: actions/cache@6f8efc29b200d32929f49075959781ed54ec270c
         with:
           path: .playwright-browsers
           key: ${{ runner.os }}-playwright-browsers-v1
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.13"
 
