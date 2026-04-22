@@ -8,8 +8,11 @@ jobs:
   smoke-test:
     name: Smoke test release bundle
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Download linux release asset
+        shell: bash
         run: |
           set -euo pipefail
           TAG="${{ github.event.release.tag_name }}"
@@ -19,6 +22,7 @@ jobs:
           ls -la release || true
 
       - name: Extract and run smoke checks
+        shell: bash
         run: |
           set -euo pipefail
           asset=$(ls release/s2a-*-linux-x86_64.tar.gz 2>/dev/null || true)
