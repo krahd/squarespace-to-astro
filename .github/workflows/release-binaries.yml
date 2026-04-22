@@ -29,9 +29,6 @@ jobs:
           - os: macos-latest
             label: macOS
             executable: s2a
-          - os: windows-latest
-            label: Windows
-            executable: s2a.exe
     env:
       RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
@@ -41,6 +38,7 @@ jobs:
         with:
           ref: ${{ env.RELEASE_TAG }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v5
