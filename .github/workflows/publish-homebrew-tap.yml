@@ -10,6 +10,9 @@ on:
         description: Release tag to publish to the shared Homebrew tap
         required: true
         type: string
+concurrency:
+  group: "publish-homebrew-tap-${{ github.ref }}"
+  cancel-in-progress: false
 
 jobs:
   update-homebrew-tap:
@@ -28,6 +31,8 @@ jobs:
     steps:
       - name: Check out source repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -37,6 +42,7 @@ jobs:
       - name: Resolve release metadata
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
           version="${RELEASE_TAG#v}"
           max_attempts=24
@@ -77,6 +83,7 @@ jobs:
       - name: Clone shared tap repo
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        shell: bash
         run: |
           if [[ -z "$HOMEBREW_TAP_TOKEN" ]]; then
             echo "HOMEBREW_TAP_TOKEN is not configured." >&2
@@ -98,6 +105,7 @@ jobs:
         working-directory: tap-repo
         env:
           RELEASE_TAG: ${{ env.RELEASE_TAG }}
+        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
