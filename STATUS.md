@@ -2,7 +2,7 @@
 
 <!-- Agents: update this file after every change. See AGENTS.md for the required fields. -->
 
-Last updated: 2026-05-06 08:53
+Last updated: 2026-05-06 13:28
 
 ---
 
@@ -104,18 +104,12 @@ Latest run: **71 passed, 0 failed** (`python -m pytest -q`, 2026-05-06).
 - `v0.5.1` (2026-04-08): classic-editor layout reconstruction in `components` mode; gallery block matching fix.
 - `v0.5.0` (2026-04-07): automatic in-place upgrade for legacy hash-suffixed `asset_manifest.json` files.
 - Added `AGENTS.md` cross-agent instruction file and this `STATUS.md`.
-- **[Unreleased]** CI smoke test: `test_generate_from_fixture_and_build` runs `npm install && npm run build` on a generated project; Node.js 20 added to CI workflow.
-- **[Unreleased]** Redirect improvements: identity redirects filtered out; `build_redirect_summary` and `write_redirect_report` produce a `redirect-report.md`; both `generate-astro` and `migrate` emit the report with `--emit-redirects`.
-- **[Unreleased]** RSS feed seeding: `crawl_site` now fetches RSS feed URLs from `probe.rss_feeds` when the sitemap is sparse, seeding post URLs from RSS 2.0 `<item><link>` and Atom `<entry><link>` elements.
-- **[Unreleased]** Sparse-sitemap warning: `build_report` now distinguishes between "sitemap not retrieved" and "sitemap empty", and notes whether RSS feeds supplemented coverage.
-- **[Unreleased]** Auth stale-state check: `check_storage_state(path)` detects missing files, empty cookie jars, and expired cookies.
 
 ---
 
-## Open / unreleased work
+## Open work
 
-- Optional `publish-pypi` GitHub Actions workflow added but not yet triggered (see `CHANGELOG.md [Unreleased]`). Requires `PYPI_API_TOKEN` Actions secret.
-- All roadmap next-steps from the previous session are implemented (see Recent changes above).
+- None currently.
 
 ---
 
@@ -123,8 +117,6 @@ Latest run: **71 passed, 0 failed** (`python -m pytest -q`, 2026-05-06).
 
 1. **Expand fixture coverage** — more real-world Squarespace layouts (homepage-heavy, mixed post/page structures).
 2. **Generated site fidelity** — closer structural match for homepage, folder, and index-style pages.
-3. **Wire `check_storage_state` into CLI** — emit warnings at crawl time if storage-state cookies are stale.
-4. **RSS seed user-facing reporting** — surface how many RSS-seeded URLs were added to the crawl report.
 
 ---
 
