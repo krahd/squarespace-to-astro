@@ -44,7 +44,18 @@ def build_report(snapshot: CrawlSnapshot) -> CrawlReport:
 
     if snapshot.probe.sitemap_status_code != 200:
         manual_follow_up.append(
-            "No sitemap was retrieved successfully, so crawl coverage may be incomplete."
+            "No sitemap was retrieved successfully, so crawl coverage may be incomplete. "
+            "If the site has RSS feeds, they will be used as supplementary seeds automatically."
+        )
+    elif len(snapshot.probe.sitemap_entries) == 0:
+        rss_hint = (
+            f" {len(snapshot.probe.rss_feeds)} RSS feed(s) were found and used as supplementary seeds."
+            if snapshot.probe.rss_feeds
+            else " No RSS feeds were found to supplement coverage."
+        )
+        manual_follow_up.append(
+            "Sitemap was retrieved but contained no URL entries, so crawl coverage "
+            "may be incomplete." + rss_hint
         )
 
     if pages_with_json == 0:

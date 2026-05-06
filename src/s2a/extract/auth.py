@@ -207,3 +207,50 @@ def apply_storage_state_cookies(client: httpx.Client, storage_state_path: Path) 
             continue
 
         client.cookies.set(name, value, domain=domain, path=path)
+
+
+def check_storage_state(path: Path) -> list[str]:
+    """Return warning strings describing stale or missing cookies in *path*.
+
+    Checks performed:
+    - File does not exist or is not valid JSON.
+    - No cookies are present.
+    - One or more cookies have a past ``expires`` timestamp (Unix seconds).
+      Cookies with ``expires == -1`` are session cookies and are not flagged.
+    """
+    warnings: list[str] = []
+
+    if not path.exists():
+        warnings.append(f"Storage state file not found: {path}")
+        return warnings
+
+    try:
+        state = read_json(path)
+    except Exception as exc:
+        warnings.append(f"Could not read storage state file {path}: {exc}")
+        return warnings
+
+    cookies = state.get("cookies", [])
+    if not cookies:
+        warnings.append(
+            f"Storage state file {path} contains no cookies; "
+            "authentication may not be applied."
+        )
+        return warnings
+
+    now = datetime.now(UTC).timestamp()
+    expired_names: list[str] = []
+    for cookie in cookies:
+        expires = cookie.get("expires", -1)
+        if expires != -1 and expires != 0 and expires < now:
+            name = cookie.get("name", "<unnamed>")
+            expired_names.append(name)
+
+    if expired_names:
+        names = ", ".join(expired_names)
+        warnings.append(
+            f"Storage state file {path} contains {len(expired_names)} expired "
+            f"cookie(s): {names}. Re-run auth capture to refresh them."
+        )
+
+    return warnings

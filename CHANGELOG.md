@@ -5,11 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project uses semantic versioning for tagged releases.
 
 ## [Unreleased]
-## [Unreleased]
 
 ### Unreleased
 
-- Add workflow: optional `publish-pypi` workflow to publish the package to PyPI on release or by manual dispatch. The workflow expects an Actions secret named `PYPI_API_TOKEN`; when missing, the publish step is skipped automatically.
+- No unreleased changes yet.
+
+## [0.5.7] - 2026-05-06
+
+### Added in 0.5.7
+
+- CI smoke test for generated Astro output: added fixture-based build validation in [tests/test_generated_sites_build.py](tests/test_generated_sites_build.py) that generates a project, runs `npm install`, and runs `npm run build`; CI now sets up Node.js 20 so this test runs on each push.
+- Redirect reporting: added `build_redirect_summary` and `write_redirect_report` in [src/s2a/generate/redirects.py](src/s2a/generate/redirects.py), and wired report emission into `generate-astro` and `migrate` in [src/s2a/cli.py](src/s2a/cli.py) when `--emit-redirects` is enabled.
+- Auth storage-state diagnostics: added `check_storage_state(path)` in [src/s2a/extract/auth.py](src/s2a/extract/auth.py) to detect missing files, empty cookie jars, and expired cookies.
+
+### Changed in 0.5.7
+
+- Redirect generation now skips identity redirects (`source_path == target`) to avoid no-op entries.
+- Crawl seeding now supplements sitemap/homepage seeds with URLs extracted from discovered RSS/Atom feeds when sitemap entries are empty, improving coverage for sitemap-light sites.
+- Report follow-up guidance now distinguishes between missing sitemap responses and empty sitemap contents, and notes RSS supplementation where available.
 
 ## [0.5.6] - 2026-04-22
 

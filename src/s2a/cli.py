@@ -22,7 +22,9 @@ from s2a.extract.xml_import import import_wordpress_xml
 from s2a.files import write_json, read_json
 from s2a.generate.astro import generate_astro_project as _generate_astro_project
 from s2a.generate.redirects import (
+    build_redirect_summary,
     build_redirects_from_manifest,
+    write_redirect_report,
     write_redirects_json,
     write_netlify_redirects,
 )
@@ -518,8 +520,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             try:
                 manifest = read_json(output_dir / "migration-manifest.json")
                 redirects = build_redirects_from_manifest(manifest)
+                summary = build_redirect_summary(manifest, redirects)
                 write_redirects_json(output_dir, redirects)
                 write_netlify_redirects(output_dir, redirects)
+                write_redirect_report(output_dir, redirects, summary)
             except Exception:
                 # Non-fatal: redirect generation should not block normal output
                 pass
@@ -705,8 +709,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 try:
                     manifest = read_json(astro_dir / "migration-manifest.json")
                     redirects = build_redirects_from_manifest(manifest)
+                    summary = build_redirect_summary(manifest, redirects)
                     write_redirects_json(astro_dir, redirects)
                     write_netlify_redirects(astro_dir, redirects)
+                    write_redirect_report(astro_dir, redirects, summary)
                 except Exception:
                     pass
             write_execution_metadata(

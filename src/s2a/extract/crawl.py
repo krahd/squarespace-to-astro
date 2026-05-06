@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable
 from urllib.parse import urlsplit
+import xml.etree.ElementTree as ET
 
 import httpx
 from bs4 import BeautifulSoup
@@ -33,6 +34,20 @@ def crawl_site(
 ) -> CrawlSnapshot:
     crawl_warnings: list[str] = []
     queue = deque(seed_urls_from_probe(probe))
+
+    # When the sitemap is sparse, supplement seeds with URLs extracted from any
+    # RSS feeds discovered on the homepage.  This improves crawl coverage for
+    # blogs and portfolios that don't publish a complete sitemap.
+    if not probe.sitemap_entries and probe.rss_feeds:
+        rss_urls = extract_urls_from_rss_feeds(client, probe.rss_feeds, probe.site_origin)
+        for url in rss_urls:
+            if url not in queue:
+                queue.append(url)
+        if rss_urls:
+            crawl_warnings.append(
+                f"Sitemap was empty; added {len(rss_urls)} URL(s) from "
+                f"{len(probe.rss_feeds)} RSS feed(s) as supplementary seeds."
+            )
     visited: set[str] = set()
     pages: list[PageSnapshot] = []
 
@@ -181,6 +196,48 @@ def seed_urls_from_probe(probe: SiteProbe) -> list[str]:
     seeds.extend(probe.sitemap_entries)
     seeds.extend(probe.homepage_links)
     return list(dict.fromkeys(seeds))
+
+
+def extract_urls_from_rss_feeds(
+    client: httpx.Client,
+    feed_urls: list[str],
+    site_origin: str,
+) -> list[str]:
+    """Fetch each RSS feed URL and extract ``<link>`` item URLs.
+
+    Only URLs that belong to the same site origin are returned so the crawl
+    stays scoped to the target site.  Errors for individual feeds are silently
+    ignored — RSS supplement is best-effort.
+    """
+    discovered: list[str] = []
+    for feed_url in feed_urls:
+        fetch = fetch_text(client, feed_url)
+        if fetch.error or not fetch.text:
+            continue
+        try:
+            root = ET.fromstring(fetch.text)
+        except ET.ParseError:
+            continue
+        # Handle both RSS 2.0 (<rss>/<channel>/<item>/<link>) and Atom
+        # (<feed>/<entry>/<link href=...>).
+        ns = {"atom": "http://www.w3.org/2005/Atom"}
+        for item in root.iter("item"):
+            link_el = item.find("link")
+            if link_el is not None and link_el.text:
+                url = canonicalize_page_url(link_el.text.strip())
+                if is_crawlable_link(url, site_origin):
+                    discovered.append(url)
+        for entry in root.iter("{http://www.w3.org/2005/Atom}entry"):
+            link_el = entry.find("atom:link[@rel='alternate']", ns) or entry.find(
+                "{http://www.w3.org/2005/Atom}link"
+            )
+            if link_el is not None:
+                href = link_el.get("href", "")
+                if href:
+                    url = canonicalize_page_url(href)
+                    if is_crawlable_link(url, site_origin):
+                        discovered.append(url)
+    return list(dict.fromkeys(discovered))
 
 
 def store_raw_html(output_dir: str, url: str, html: str) -> str:
