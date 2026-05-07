@@ -1,144 +1,173 @@
-# squarespace-to-astro — Project Status
+# squarespace-to-astro – Project Status
 
-<!-- Agents: update this file after every change. See AGENTS.md for the required fields. -->
+Last updated: 2026-05-07 00:15
 
-Last updated: 2026-05-06 13:28
+## Project purpose
 
----
+squarespace-to-astro (`s2a`) is a Python 3.11+ CLI for extracting content from Squarespace sites and generating editable Astro projects. It supports probing, crawling, authenticated capture, XML import, Astro generation, redirects, asset download/deduplication, and an end-to-end migration workflow.
 
-Current version: 0.5.7
-Branch: main
-Overall status: Healthy - all tests passing
-Test suite: 71 passed, 0 failed (`python -m pytest -q`, 2026-05-06)
+## Current implementation state
 
----
+The project is currently at version `0.5.7` in the status snapshot. It is distributed as a pip package, standalone binary bundles for macOS arm64 and Linux x86_64, and through the `krahd/homebrew-tap` Homebrew tap.
 
-## Current state
+The CLI exposes six user-facing commands:
 
-`squarespace-to-astro` (`s2a`) is a Python 3.11+ CLI at version **0.5.7** on branch `main`.
-The package is distributed as a pip package (`squarespace-to-astro`), standalone
-binaries for macOS arm64 and Linux x86_64, and via the Homebrew tap
-`krahd/homebrew-tap`.
+- `s2a probe`
+- `s2a crawl`
+- `s2a auth-browser`
+- `s2a import-xml`
+- `s2a generate-astro`
+- `s2a migrate`
 
-The CLI exposes six commands:
+Generation and migration support `--fidelity-mode`, `--layout-strategy`, `--choose-layout-strategy`, and `--markdown`. Component reconstruction covers portfolio grids, gallery blocks, Fluid Engine sections, and classic-editor layouts.
 
-| Command | Purpose |
-|---|---|
-| `s2a probe` | Inspect Squarespace signals, sitemap, robots, password gates, JSON endpoint availability |
-| `s2a crawl` | Capture pages, links, headings, raw HTML, JSON payloads, and optionally download localized assets |
-| `s2a auth-browser` | Capture Playwright storage state for authenticated / password-gated content |
-| `s2a import-xml` | Normalize a Squarespace WordPress XML export into JSON |
-| `s2a generate-astro` | Convert crawl snapshot + optional XML into a buildable Astro project |
-| `s2a migrate` | Orchestrate probe → crawl → XML import → asset download → Astro generation |
+Localized assets use readable route-based public filenames, with `asset_manifest.json` recording alias URLs and content-hash deduplication metadata. Legacy hash-suffixed manifests are upgraded automatically during generation. Redirect generation is available via `--emit-redirects` and writes redirect JSON, a Netlify `_redirects` file, and a redirect report.
 
-`generate-astro` and `migrate` accept `--fidelity-mode`, `--layout-strategy`,
-`--choose-layout-strategy`, and `--markdown` to trade editability against visual
-fidelity. Component reconstruction covers portfolio grids, gallery blocks, Fluid
-Engine sections, and classic-editor layouts.
+## Active focus
 
-Localized assets use readable route-based public filenames
-(e.g. `/assets/images/be-water-1.webp`). `asset_manifest.json` records alias
-URLs and content-hash deduplication metadata. Legacy hash-suffixed manifests are
-upgraded automatically during generation.
+Current focus is maintaining healthy release state, expanding real-world fixture coverage, improving generated-site fidelity, preserving CLI compatibility, and keeping binary/Homebrew distribution tooling aligned.
 
-Redirect generation is available via `--emit-redirects` (writes `redirects.json`,
-a Netlify `_redirects` file, and a `redirect-report.md` coverage report).
-Identity redirects are filtered out automatically.
+## Architecture overview
 
----
+The CLI orchestrates probing, crawling, auth capture, XML import, asset download, data normalisation, Astro generation, and redirect output. The `src/s2a/` package is structured by extraction, normalisation, generation, and runtime helper concerns. Tests cover CLI wiring, assets, auth, XML import, redirects, generated-site builds, fixtures, networking, reports, runtime helpers, and URL utilities.
 
-## Source layout
+### Architecture diagram
 
-```
-src/s2a/
-  cli.py              — argument parsing, command wiring, output directory resolution, execution metadata
-  probe.py            — site probing and capability detection
-  net.py              — HTTP client, User-Agent, shared request helpers
-  files.py            — output directory helpers, file I/O utilities
-  runtime.py          — shared runtime helpers
-  url_utils.py        — URL normalization and manipulation
-  extract/
-    crawl.py          — page crawling, link discovery, sitemap handling, RSS feed seeding
-    auth.py           — Playwright storage-state capture, credential guards, stale-cookie detection
-    assets.py         — streaming asset download, content-hash dedup, manifest writing
-    json_data.py      — opportunistic Squarespace JSON extraction
-    xml_import.py     — Squarespace WordPress XML → normalized JSON
-  normalize/
-    models.py         — normalized data models
-    transform.py      — report building and data normalization
-  generate/
-    astro.py          — Astro project generation, fidelity/layout controls, component reconstruction
-    redirects.py      — redirect mapping, identity filtering, Netlify _redirects emission, coverage report
-```
+<svg xmlns="http://www.w3.org/2000/svg" width="1060" height="520" viewBox="0 0 1060 520" role="img" aria-labelledby="s2a-arch-title s2a-arch-desc">
+  <title id="s2a-arch-title">squarespace-to-astro architecture</title>
+  <desc id="s2a-arch-desc">The s2a CLI orchestrates extraction, normalisation, Astro generation, redirect output, tests, and release tooling.</desc>
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 z" /></marker></defs>
+  <rect x="40" y="205" width="160" height="75" rx="10" fill="none" stroke="black" /><text x="120" y="235" text-anchor="middle" font-size="14">s2a CLI</text><text x="120" y="257" text-anchor="middle" font-size="12">src/s2a/cli.py</text>
+  <rect x="285" y="55" width="180" height="80" rx="10" fill="none" stroke="black" /><text x="375" y="87" text-anchor="middle" font-size="14">extract/</text><text x="375" y="109" text-anchor="middle" font-size="12">crawl, auth, XML,</text><text x="375" y="127" text-anchor="middle" font-size="12">assets, JSON</text>
+  <rect x="285" y="205" width="180" height="75" rx="10" fill="none" stroke="black" /><text x="375" y="235" text-anchor="middle" font-size="14">normalize/</text><text x="375" y="257" text-anchor="middle" font-size="12">models and reports</text>
+  <rect x="285" y="355" width="180" height="75" rx="10" fill="none" stroke="black" /><text x="375" y="385" text-anchor="middle" font-size="14">generate/</text><text x="375" y="407" text-anchor="middle" font-size="12">Astro and redirects</text>
+  <rect x="560" y="90" width="190" height="75" rx="10" fill="none" stroke="black" /><text x="655" y="120" text-anchor="middle" font-size="14">Squarespace input</text><text x="655" y="142" text-anchor="middle" font-size="12">site, sitemap, XML</text>
+  <rect x="560" y="300" width="190" height="80" rx="10" fill="none" stroke="black" /><text x="655" y="330" text-anchor="middle" font-size="14">Astro output</text><text x="655" y="352" text-anchor="middle" font-size="12">project, assets,</text><text x="655" y="370" text-anchor="middle" font-size="12">redirects</text>
+  <rect x="815" y="90" width="190" height="75" rx="10" fill="none" stroke="black" /><text x="910" y="120" text-anchor="middle" font-size="14">tests/</text><text x="910" y="142" text-anchor="middle" font-size="12">fixtures and builds</text>
+  <rect x="815" y="300" width="190" height="80" rx="10" fill="none" stroke="black" /><text x="910" y="330" text-anchor="middle" font-size="14">release tooling</text><text x="910" y="352" text-anchor="middle" font-size="12">binary bundles and</text><text x="910" y="370" text-anchor="middle" font-size="12">Homebrew formula</text>
+  <line x1="200" y1="235" x2="285" y2="95" stroke="black" marker-end="url(#arrow)" /><line x1="200" y1="242" x2="285" y2="242" stroke="black" marker-end="url(#arrow)" /><line x1="200" y1="250" x2="285" y2="392" stroke="black" marker-end="url(#arrow)" /><line x1="465" y1="95" x2="560" y2="128" stroke="black" marker-end="url(#arrow)" /><line x1="465" y1="392" x2="560" y2="340" stroke="black" marker-end="url(#arrow)" /><line x1="750" y1="128" x2="815" y2="128" stroke="black" marker-end="url(#arrow)" /><line x1="750" y1="340" x2="815" y2="340" stroke="black" marker-end="url(#arrow)" />
+</svg>
 
----
+### Flow chart
 
-## Tests
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="350" viewBox="0 0 1080 350" role="img" aria-labelledby="s2a-flow-title s2a-flow-desc">
+  <title id="s2a-flow-title">s2a migration flow</title>
+  <desc id="s2a-flow-desc">The migrate command probes a site, crawls content, optionally imports XML and downloads assets, normalises data, generates Astro, and emits redirects.</desc>
+  <defs><marker id="flowarrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L10 5 L0 10 z" /></marker></defs>
+  <rect x="25" y="140" width="115" height="65" rx="10" fill="none" stroke="black" /><text x="82" y="168" text-anchor="middle" font-size="12">Probe</text><text x="82" y="186" text-anchor="middle" font-size="12">site</text>
+  <rect x="180" y="140" width="115" height="65" rx="10" fill="none" stroke="black" /><text x="237" y="168" text-anchor="middle" font-size="12">Crawl</text><text x="237" y="186" text-anchor="middle" font-size="12">pages</text>
+  <rect x="335" y="140" width="120" height="65" rx="10" fill="none" stroke="black" /><text x="395" y="168" text-anchor="middle" font-size="12">Import XML</text><text x="395" y="186" text-anchor="middle" font-size="12">optional</text>
+  <rect x="495" y="140" width="125" height="65" rx="10" fill="none" stroke="black" /><text x="557" y="168" text-anchor="middle" font-size="12">Download</text><text x="557" y="186" text-anchor="middle" font-size="12">assets</text>
+  <rect x="660" y="140" width="125" height="65" rx="10" fill="none" stroke="black" /><text x="722" y="168" text-anchor="middle" font-size="12">Normalise</text><text x="722" y="186" text-anchor="middle" font-size="12">snapshot</text>
+  <rect x="825" y="140" width="125" height="65" rx="10" fill="none" stroke="black" /><text x="887" y="168" text-anchor="middle" font-size="12">Generate</text><text x="887" y="186" text-anchor="middle" font-size="12">Astro</text>
+  <rect x="990" y="140" width="70" height="65" rx="10" fill="none" stroke="black" /><text x="1025" y="168" text-anchor="middle" font-size="12">Emit</text><text x="1025" y="186" text-anchor="middle" font-size="12">files</text>
+  <line x1="140" y1="172" x2="180" y2="172" stroke="black" marker-end="url(#flowarrow)" /><line x1="295" y1="172" x2="335" y2="172" stroke="black" marker-end="url(#flowarrow)" /><line x1="455" y1="172" x2="495" y2="172" stroke="black" marker-end="url(#flowarrow)" /><line x1="620" y1="172" x2="660" y2="172" stroke="black" marker-end="url(#flowarrow)" /><line x1="785" y1="172" x2="825" y2="172" stroke="black" marker-end="url(#flowarrow)" /><line x1="950" y1="172" x2="990" y2="172" stroke="black" marker-end="url(#flowarrow)" />
+</svg>
 
-```
-tests/
-  test_assets.py                 — asset download, dedup, manifest writing
-  test_astro_generator.py        — Astro generation correctness
-  test_auth.py                   — auth-capture guards and permission hardening
-  test_cli.py                    — CLI argument parsing and command wiring
-  test_fixtures_integration.py   — real-world fixture-based integration tests
-  test_generated_sites_build.py  — generated Astro sites build without errors
-  test_net.py                    — HTTP client helpers
-  test_redirects.py              — redirect generation
-  test_report.py                 — normalization and report building
-  test_runtime.py                — runtime helpers
-  test_url_utils.py              — URL normalization
-  test_xml_import.py             — XML import pipeline
-  fixtures/                      — trimmed real-world snapshots (laurenzo-site, laurenzo-site-asset-verify, homepage-heavy, …)
+## Setup and run instructions
+
+Development setup:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .[dev]
+python -m playwright install chromium
+s2a --help
 ```
 
-Latest run: **71 passed, 0 failed** (`python -m pytest -q`, 2026-05-06).
+Tests:
 
----
+```bash
+python -m pytest
+python -m pytest -q
+```
+
+Release smoke build:
+
+```bash
+PLAYWRIGHT_BROWSERS_PATH="$HOME/Library/Caches/ms-playwright" \
+python scripts/build_binary_release.py
+```
+
+## Configuration and environment variables
+
+- Python 3.11 or newer is required.
+- Playwright Chromium is required for browser-auth capture and some release smoke workflows.
+- `PLAYWRIGHT_BROWSERS_PATH` may be set for standalone bundle smoke testing.
+
+## Important files and directories
+
+- `src/s2a/cli.py`: CLI command definitions.
+- `src/s2a/extract/`: crawling, auth, assets, JSON, XML import.
+- `src/s2a/normalize/`: data models and report building.
+- `src/s2a/generate/`: Astro generation and redirects.
+- `tests/`: automated test suite and fixtures.
+- `docs/`: static project website.
+- `USER_GUIDE.md`, `CONTRIBUTING.md`, `DEVELOPMENT.md`, `RELEASE.md`, `CHANGELOG.md`: user, developer, release, and history docs.
+- `scripts/build_binary_release.py`: standalone bundle builder.
+- `scripts/render_homebrew_formula.py`: Homebrew formula renderer.
+- `.github/workflows/release-binaries.yml`: binary bundle publication workflow.
+- `.github/workflows/publish-homebrew-tap.yml`: Homebrew tap synchronisation workflow.
 
 ## Recent changes
 
-- `v0.5.7` (2026-05-06): CI Node-backed Astro build smoke test; redirect summary/report output and identity-filtering; RSS feed crawl seeding fallback; sparse-sitemap follow-up guidance improvements; auth storage-state staleness checks.
-- `v0.5.6` (2026-04-22): post-release housekeeping; removed older GitHub releases and tags.
-- `v0.5.2` (2026-04-20): streaming asset downloads; redirect generation (`--emit-redirects`); auth artifact permission hardening; CI workflow; redirect tests.
-- `v0.5.1` (2026-04-08): classic-editor layout reconstruction in `components` mode; gallery block matching fix.
-- `v0.5.0` (2026-04-07): automatic in-place upgrade for legacy hash-suffixed `asset_manifest.json` files.
-- Added `AGENTS.md` cross-agent instruction file and this `STATUS.md`.
+- `v0.5.7` added CI Node-backed Astro build smoke testing, redirect summary/report output, identity redirect filtering, RSS feed crawl seeding fallback, sparse-sitemap guidance improvements, and auth storage-state staleness checks.
+- `v0.5.6` included post-release housekeeping and older release/tag removal.
+- `v0.5.2` added streaming asset downloads, redirect generation, auth artefact permission hardening, CI workflow, and redirect tests.
+- Root-level agent and status governance is being standardised.
+
+## Tests and verification status
+
+Previously recorded latest validation:
+
+- `python -m pytest -q` -> 71 passed, 0 failed on 2026-05-06.
+- CI runs tests and installs Playwright browsers on push.
+- Binary bundles are built with PyInstaller for macOS arm64 and Linux x86_64.
+- Homebrew formula is rendered by `scripts/render_homebrew_formula.py` and published to `krahd/homebrew-tap`.
+
+No tests were run while creating this documentation-only status normalisation.
+
+## Known issues, risks, and limitations
+
+Known gaps outside current scope:
+
+- commerce data and checkout flows are not migrated
+- forms and form submissions are not migrated
+- events are not migrated
+- members-only systems are not migrated
+- full Squarespace admin automation is not implemented
+
+Current risks:
+
+- Real-world Squarespace layouts vary widely and need broad fixture coverage.
+- Browser-auth storage state can be sensitive and must not be leaked.
+- Generated-site fidelity remains a continuing improvement area for complex homepages, folders, and index-style pages.
+
+## Pending tasks
+
+- Expand fixture coverage for more real-world Squarespace layouts.
+- Improve generated-site fidelity for homepage-heavy, folder, and index-style pages.
+- Keep distribution documentation aligned with binary and Homebrew workflows.
+
+## Next steps
+
+1. Add more real-world fixture coverage.
+2. Improve generated output for homepage, folder, and index-style pages.
+3. Continue validating generated Astro sites with build smoke tests.
+
+## Longer-term steps
+
+1. Preserve CLI compatibility while migration fidelity improves.
+2. Keep asset manifest compatibility and automatic legacy upgrades reliable.
+3. Continue treating commerce, forms, events, members-only systems, and admin automation as explicit out-of-scope boundaries unless project scope changes.
+
+## Decisions and rationale
+
+- The supported external interface is the `s2a` CLI.
+- Internal Python modules may change between releases unless explicitly documented as stable.
+- Migration output prioritises editability while offering fidelity controls for layout-heavy pages.
 
 ---
 
-## Open work
-
-- None currently.
-
----
-
-## Next steps (from roadmap)
-
-1. **Expand fixture coverage** — more real-world Squarespace layouts (homepage-heavy, mixed post/page structures).
-2. **Generated site fidelity** — closer structural match for homepage, folder, and index-style pages.
-
----
-
-## Known gaps (outside current scope)
-
-- Commerce data, checkout flows — not migrated
-- Forms and form submissions — not migrated
-- Events — not migrated
-- Members-only systems — not migrated
-- Full Squarespace admin automation — not implemented
-
----
-
-## Known issues
-
-None. All 71 tests pass locally and in CI.
-
----
-
-## Validation
-
-- `python -m pytest -q` → **71 passed** (2026-05-06)
-- CI: `.github/workflows/ci.yml` runs tests and installs Playwright browsers on every push
-- Binary bundles built with PyInstaller for macOS arm64 and Linux x86_64
-- Homebrew formula rendered by `scripts/render_homebrew_formula.py` and published to `krahd/homebrew-tap`
+Last updated: 2026-05-07 00:15
