@@ -1,45 +1,108 @@
-# Agent Instructions
+# AGENTS.md
 
-This file provides instructions for AI coding agents (GitHub Copilot, OpenAI Codex, Anthropic Claude, and compatible tools) working in this repository.
+Repository instructions for AI coding agents working in this project.
 
----
+This file is the durable source of truth for GitHub Copilot, OpenAI Codex, Claude Code, and compatible coding agents. Read it before making changes.
 
-## Project overview
+## 1: Non-negotiable rules
 
-`squarespace-to-astro` (`s2a`) is a Python CLI that extracts content from Squarespace sites and generates editable [Astro](https://github.com/withastro/astro) projects. The supported external interface is the `s2a` CLI; the Python modules under `src/s2a/` are implementation details.
+- Keep `STATUS.md` accurate at all times.
+- `STATUS.md` must exist in the repository root.
+- Do not finish a task that changes the project without reviewing and, when needed, updating `STATUS.md`.
+- Do not invent project facts. Inspect the repository and record uncertainty explicitly.
+- Do not overwrite user work or unrelated changes.
+- Do not commit secrets, credentials, tokens, private keys, local environment files, browser storage-state files, generated site output, release artefacts, or generated sensitive data.
+- Prefer small, focused changes over broad rewrites.
+- Preserve existing CLI flags and user-visible workflows unless explicitly asked to change them.
+- Verify meaningful changes with the narrowest reliable command available.
+- Do not claim tests passed unless they were actually run.
 
-Key documents:
-- [README.md](README.md) — repository entry point
-- [DEVELOPMENT.md](DEVELOPMENT.md) — architecture, testing, and distribution tooling
-- [CONTRIBUTING.md](CONTRIBUTING.md) — contributor setup and pull-request expectations
-- [ROADMAP.md](ROADMAP.md) — planned work and current boundaries
-- [CHANGELOG.md](CHANGELOG.md) — released changes by version
-- [STATUS.md](STATUS.md) — **live project and repository status** (must be kept current)
+## 2: Communication style
 
----
+Use terse, factual, technical communication. Do not use playful, whimsical, cute, decorative, or filler progress phrases such as "combobulating", "cooking", "thinking...", "working on it", "let me dive in", "I'll get started", or "working my magic".
 
-## STATUS.md — mandatory maintenance
+Allowed status-update style: "Reading files." "Found the issue." "Applying patch." "Tests passed." "Tests failed: <reason>."
 
-**`STATUS.md` must be kept up to date at all times.**
+No jokes, metaphors, fake enthusiasm, anthropomorphising, or decorative progress messages. Prefer concise present-tense technical updates. Use British English for prose documentation unless the repository consistently uses another variant.
 
-Every time you make a change to the codebase — including code, tests, documentation, configuration, scripts, or any other tracked file — you must update `STATUS.md` before finishing the task. The file records the overall health and current state of the project so any agent or contributor can orient themselves quickly.
+## 3: Standard work loop
 
-Required fields in `STATUS.md`:
+1. Read this file and `STATUS.md` before editing.
+2. Inspect relevant files, docs, tests, packaging metadata, and CI workflows.
+3. Identify the smallest safe change.
+4. Search call sites before changing CLI commands, flags, output formats, generated Astro structure, asset manifests, redirect generation, auth handling, or release tooling.
+5. Make focused edits.
+6. Run relevant verification when possible.
+7. Update documentation when behaviour, setup, architecture, commands, public APIs, or release state change.
+8. Update `STATUS.md` if project state changed.
+9. Report changed files, verification, and remaining issues.
 
-- **Last updated**: date and time in local timezone using `YYYY-MM-DD hh:mm`, e.g. `2026-05-06 08:39`
-- **Current version**: the version string from `pyproject.toml`
-- **Branch**: the active branch
-- **Overall status**: a one-line summary (e.g. `Healthy — all tests passing`)
-- **Test suite**: pass/fail/count of the latest local run
-- **Open work**: a short bullet list of active or pending tasks
-- **Known issues**: any known failures, broken tests, or blockers
-- **Recent changes**: a brief description of the most recent change made
+## 4: Project-specific map
 
-Failing to update `STATUS.md` after making changes is an error. Update it as the last step of every task.
+### 4.1: Project shape
 
----
+- Purpose: Python CLI for extracting content from Squarespace and generating editable Astro projects.
+- Supported external interface: the `s2a` CLI.
+- Main workflows: probe, crawl, auth-browser, import-xml, generate-astro, migrate.
+- Distribution: source install, standalone binary bundles, and Homebrew tap publication.
+- Python modules under `src/s2a/` are primarily implementation details unless documented otherwise.
 
-## Development environment
+### 4.2: Important paths
+
+- `README.md`: repository entry point.
+- `STATUS.md`: complete current project status report; mandatory upkeep.
+- `USER_GUIDE.md`: end-user installation and migration workflow.
+- `CONTRIBUTING.md`: contributor setup and PR expectations.
+- `DEVELOPMENT.md`: architecture, testing, and distribution tooling.
+- `RELEASE.md`: versioning, tagging, binary publishing, and Homebrew tap publication.
+- `CHANGELOG.md`: release history.
+- `src/s2a/cli.py`: CLI entry point and command definitions.
+- `src/s2a/extract/`: HTTP crawling, browser auth, XML import, and asset handling.
+- `src/s2a/normalize/`: reports and data normalisation.
+- `src/s2a/generate/`: Astro project and redirect generation.
+- `tests/`: CLI, generator, auth, XML, asset, redirect, runtime, fixture, and generated-site tests.
+- `scripts/build_binary_release.py`: PyInstaller bundle builder.
+- `scripts/render_homebrew_formula.py`: Homebrew formula renderer.
+- `.github/workflows/`: CI and release workflows.
+
+### 4.3: Safety invariants
+
+- Do not leak browser-authenticated storage-state files or credentials.
+- Preserve confirmation prompts and user control for asset downloads where present.
+- Preserve route-based asset naming and manifest compatibility unless explicitly changing the format.
+- Keep generated-site output directories and release artefacts out of source control unless intentionally tracked.
+- Do not break existing CLI flags without explicit instruction and documentation.
+- Generated Astro sites should remain buildable under the documented validation workflow.
+
+## 5: STATUS.md maintenance
+
+`STATUS.md` is mandatory project state, not optional documentation.
+
+Required timestamp line near the top:
+
+```text
+Last updated: YYYY-MM-DD HH:MM
+```
+
+Use 24-hour local time. If no other timezone is specified, use `America/Montevideo`. Duplicate the exact same line as the final line at the bottom of `STATUS.md`. Update both lines together.
+
+`STATUS.md` must be a complete current snapshot, not a changelog. Include relevant sections for purpose, current state, active focus, architecture, setup/run instructions, configuration, important files, recent changes, tests, risks, pending tasks, next steps, longer-term steps, and decisions.
+
+## 6: Diagrams in STATUS.md
+
+Include useful inline SVG architecture and flow diagrams when the structure is meaningful enough. Keep text inside boxes and canvas bounds. Keep arrows out of unrelated boxes and labels. Prefer generous spacing and simple SVG primitives.
+
+## 7: Validation
+
+Typical validation commands:
+
+```bash
+python -m pytest
+python -m pytest -q
+python scripts/build_binary_release.py
+```
+
+For development setup:
 
 ```bash
 python -m venv .venv
@@ -48,47 +111,8 @@ pip install -e .[dev]
 python -m playwright install chromium
 ```
 
-Python 3.11 or newer is required.
+Run the narrowest relevant checks first. Record tests not run when relevant. Update `CHANGELOG.md` for user-visible changes when appropriate.
 
----
+## 8: Final response requirements
 
-## Running the test suite
-
-```bash
-python -m pytest
-```
-
-Run the full suite before completing any task that touches source code or tests. Record the result in `STATUS.md`.
-
----
-
-## Code conventions
-
-- The CLI entry point and all command definitions live in `src/s2a/cli.py`.
-- Extraction logic goes in `src/s2a/extract/`.
-- Normalization and report building go in `src/s2a/normalize/`.
-- Astro project generation goes in `src/s2a/generate/`.
-- Shared helpers live in `src/s2a/files.py`, `runtime.py`, `net.py`, and `url_utils.py`.
-- Tests live in `tests/` and mirror the module they cover.
-- Do not add public Python API surface without a matching test.
-- Do not break backward compatibility of existing CLI flags.
-- Follow the existing code style (no reformatting of unrelated files).
-
----
-
-## Commit and PR discipline
-
-- Write clear, concise commit messages that describe *what* changed and *why*.
-- Keep commits focused; avoid bundling unrelated changes.
-- Update [CHANGELOG.md](CHANGELOG.md) under `## [Unreleased]` for every user-visible change.
-- Update [STATUS.md](STATUS.md) in every commit that touches the tracked codebase.
-
----
-
-## What NOT to do
-
-- Do not delete or overwrite `generated/`, `site-output/`, or `tests/fixtures/` content without explicit instruction.
-- Do not push to remote branches, open pull requests, or publish releases without explicit instruction.
-- Do not modify `pyproject.toml` version strings without explicit instruction.
-- Do not add optional dependencies, new CLI flags, or new commands unless asked.
-- Do not reformat files unrelated to the task at hand.
+When finishing a task, report concisely: what changed, files changed, verification commands and results, whether `STATUS.md` was updated, and remaining issues or follow-up work.
