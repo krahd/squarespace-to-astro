@@ -1,6 +1,6 @@
 # squarespace-to-astro – Project Status
 
-Last updated: 2026-05-07 00:15
+Last updated: 2026-05-07 00:54
 
 ## Project purpose
 
@@ -112,6 +112,7 @@ python scripts/build_binary_release.py
 
 ## Recent changes
 
+- The static project website in `docs/` was refreshed with current `v0.5.7` messaging, updated migration guidance, and an improved responsive visual design.
 - `v0.5.7` added CI Node-backed Astro build smoke testing, redirect summary/report output, identity redirect filtering, RSS feed crawl seeding fallback, sparse-sitemap guidance improvements, and auth storage-state staleness checks.
 - `v0.5.6` included post-release housekeeping and older release/tag removal.
 - `v0.5.2` added streaming asset downloads, redirect generation, auth artefact permission hardening, CI workflow, and redirect tests.
@@ -170,4 +171,4 @@ Current risks:
 
 ---
 
-Last updated: 2026-05-07 00:15
+Last updated: 2026-05-07 00:54
