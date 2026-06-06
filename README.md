@@ -2,7 +2,7 @@
 
 `s2a` is a Python CLI for extracting content from Squarespace and generating an editable [Astro](https://github.com/withastro/astro) project. This README is the repository entry point for developers, contributors, and advanced users who want to run the project from source or understand how the codebase is organized.
 
-Current release: `v0.5.2`.
+Current release: `v0.5.7`.
 
 For end-user installation and day-to-day usage:
 
@@ -26,9 +26,9 @@ The current implementation supports these main workflows:
 - estimating and downloading Squarespace-hosted assets during `crawl` and `migrate`, with a confirmation prompt, text progress output, route-based public filenames, and content-hash deduplication recorded in `asset_manifest.json`
 - capturing browser-authenticated session state with Playwright and reusing those cookies during probe and crawl runs
 - importing Squarespace WordPress XML exports into a normalized JSON format
-- generating a buildable [Astro](https://github.com/withastro/astro) project from crawl output plus optional XML content, including `--fidelity-mode`, `--layout-strategy`, `--choose-layout-strategy`, and `--markdown` controls for layout-heavy pages, with `components` reconstruction for portfolio grids, gallery blocks, Fluid Engine sections, and classic-editor layouts
+- generating a buildable [Astro](https://github.com/withastro/astro) project from crawl output plus optional XML content, including `--fidelity-mode`, `--layout-strategy`, `--choose-layout-strategy`, `--markdown`, `--upgrade-legacy-assets`, and `--clean` controls for layout-heavy pages, with `components` reconstruction for portfolio grids, gallery blocks, Fluid Engine sections, and classic-editor layouts
 - orchestrating probe, crawl, optional XML import, asset download, and Astro generation in one `s2a migrate` workflow
-- upgrading older snapshot-root `asset_manifest.json` files automatically during `generate-astro` so legacy hash-suffixed localized filenames are rewritten to the current route-based naming scheme
+- keeping legacy snapshot-root `asset_manifest.json` upgrades opt-in via `generate-astro --upgrade-legacy-assets`, so default generation leaves input manifests untouched and warns when legacy filenames are detected
 
 Current boundaries:
 
@@ -104,9 +104,9 @@ Usage examples and end-user task flows live in [USER_GUIDE.md](USER_GUIDE.md). T
 
 ## Distribution
 
-This project currently ships in three ways. The current release is `v0.5.2`.
+This project currently ships in three ways. The current release is `v0.5.7`.
 
-- standalone binary bundles attached to GitHub Releases
+- standalone binary bundles for macOS arm64 and Linux x86_64 attached to GitHub Releases
 - a Homebrew formula published through `krahd/homebrew-tap`
 - source-based installation from this repository
 

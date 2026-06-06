@@ -8,7 +8,9 @@ The format is based on Keep a Changelog, and this project uses semantic versioni
 
 ### Unreleased
 
-- No unreleased changes yet.
+- `generate-astro` now accepts `--upgrade-legacy-assets` and `--clean`; legacy snapshot-root asset-manifest upgrades are opt-in instead of happening by default, and safe-path checks prevent `--clean` from deleting `/`, the current working directory, or the home directory.
+- `--emit-redirects` failures in `generate-astro` and `migrate` now surface warnings instead of being swallowed, and the best-effort migration report write now warns when serialization fails.
+- CLI storage-state handling now validates supplied or captured `storage_state.json` files before crawl/probe work starts, the crawler now prefers Atom alternate links correctly, asset host matching uses exact-or-subdomain checks, and WordPress XML parsing uses `defusedxml` when available.
 
 ## [0.5.7] - 2026-05-06
 

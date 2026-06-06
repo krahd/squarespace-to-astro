@@ -44,8 +44,9 @@ The source of truth for command names, flags, defaults, and help text is [src/s2
 Current generator-specific behavior to keep in mind while changing the codebase:
 
 - `generate-astro` and `migrate` support `--fidelity-mode`, `--layout-strategy`, `--choose-layout-strategy`, and `--markdown` to trade off editability against visual fidelity.
+- `generate-astro` also supports `--upgrade-legacy-assets` for in-place snapshot-root manifest upgrades and `--clean` for removing the Astro output directory before generation.
 - localized assets are written under route-based public paths such as `/assets/images/be-water-1.webp`, while `asset_manifest.json` keeps alias URLs and content-hash deduplication metadata.
-- older snapshot-root `asset_manifest.json` files that still contain hash-suffixed localized filenames are upgraded automatically during generation before the Astro project is written.
+- older snapshot-root `asset_manifest.json` files that still contain hash-suffixed localized filenames are only upgraded when `generate-astro --upgrade-legacy-assets` is requested; otherwise generation continues with the manifest as-is and emits a warning.
 
 ## Execution flow
 
@@ -54,7 +55,7 @@ The common migration path is:
 1. `probe` inspects target behavior and writes a capability summary.
 2. `crawl` captures pages, discovered links, available structured data, and optional localized asset downloads into a snapshot.
 3. `import-xml` optionally normalizes a Squarespace WordPress XML export.
-4. `generate-astro` converts the snapshot and optional XML data into an editable Astro project.
+4. `generate-astro` converts the snapshot and optional XML data into an editable Astro project, and can optionally rewrite legacy asset manifests when `--upgrade-legacy-assets` is passed.
 5. `migrate` orchestrates the above as a single command.
 
 When `--output-dir` is omitted, `probe`, `crawl`, `auth-browser`, `import-xml`, and `migrate` create a timestamped run folder under `site-output/`.
@@ -74,7 +75,7 @@ Important outputs include:
 - `astro_generation.json`: generator summary
 - `migration-manifest.json`: generated Astro content manifest
 
-The generated Astro project itself is written either to the directory passed via `--output-dir` for `generate-astro` or to `--astro-dir` for `migrate`. When no posts are detected, the generator emits a pages-only content configuration instead of a posts collection scaffold.
+The generated Astro project itself is written either to the directory passed via `--output-dir` for `generate-astro` or to `--astro-dir` for `migrate`. When `--clean` is used, only that Astro output directory is removed; the crawl snapshot directory is left intact. When no posts are detected, the generator emits a pages-only content configuration instead of a posts collection scaffold.
 
 ## Testing
 
@@ -123,7 +124,7 @@ Current Homebrew support is intentionally limited to the release assets that exi
 
 ## Release automation
 
-- [.github/workflows/release-binaries.yml](.github/workflows/release-binaries.yml) builds Linux, macOS, and Windows standalone bundles and uploads them to the GitHub Release.
+- [.github/workflows/release-binaries.yml](.github/workflows/release-binaries.yml) builds Linux and macOS standalone bundles and uploads them to the GitHub Release. Windows users should install from source until a Windows binary workflow is added.
 - [.github/workflows/publish-homebrew-tap.yml](.github/workflows/publish-homebrew-tap.yml) resolves release asset checksums, renders the formula, and updates `krahd/homebrew-tap`.
 
 See [RELEASE.md](RELEASE.md) for the operational release checklist.

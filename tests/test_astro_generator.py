@@ -1,9 +1,18 @@
+import json
 import hashlib
 from pathlib import Path
 
+from bs4 import BeautifulSoup
+
 from s2a.files import read_json, write_json, write_text
-from s2a.generate.astro import body_from_html, extract_main_html, generate_astro_project
+from s2a.generate.astro import (
+    body_from_html,
+    extract_main_html,
+    generate_astro_project,
+    render_astro_config,
+)
 from s2a.normalize.models import (
+    AstroManifest,
     AssetManifest,
     CrawlSnapshot,
     DownloadedAsset,
@@ -11,6 +20,126 @@ from s2a.normalize.models import (
     PageSnapshot,
     SiteProbe,
 )
+
+
+def _make_manifest(base_url: str | None) -> AstroManifest:
+    return AstroManifest(
+        generated_at="2026-04-05T00:00:00+00:00",
+        site_title="Example Site",
+        site_description=None,
+        base_url=base_url,
+        blog_base_path="/blog",
+        blog_title="Blog",
+        fidelity_mode="high",
+        layout_strategy="hybrid",
+        markdown_first=False,
+        navigation_source="probe-links",
+        header_style="solid",
+        background_style="plain",
+        header_width="inset",
+        header_layout="stacked",
+        header_alignment="left",
+        page_width=None,
+        page_padding=None,
+        header_padding=None,
+    )
+
+
+def test_render_astro_config_escapes_hostile_values() -> None:
+    manifest = _make_manifest("https://example.com/it's-ok\nback\\slash")
+    base_path = "/x'y\nback\\slash"
+
+    rendered = render_astro_config(manifest, base_path)
+
+    assert f"  site: {json.dumps(manifest.base_url)}," in rendered
+    assert f"  base: {json.dumps(base_path)}," in rendered
+    assert "  site: '" not in rendered
+    assert "  base: '" not in rendered
+
+
+def test_extract_main_html_sanitizes_event_handlers_and_javascript_urls() -> None:
+    html = """
+        <html>
+            <body>
+                <main>
+                    <div onmouseover="alert(1)">
+                        <a href="javascript:alert(2)" onclick="alert(3)">Bad link</a>
+                        <img src="javascript:alert(4)" onerror="alert(5)" alt="Bad image" />
+                        <a href="/assets/images/example.jpg">Asset link</a>
+                    </div>
+                </main>
+            </body>
+        </html>
+    """
+
+    fragment = BeautifulSoup(extract_main_html(html), "html.parser")
+    div = fragment.find("div")
+    assert div is not None
+    assert not any(attr.startswith("on") for attr in div.attrs)
+
+    bad_link = fragment.find("a", string="Bad link")
+    assert bad_link is not None
+    assert "href" not in bad_link.attrs
+    assert not any(attr.startswith("on") for attr in bad_link.attrs)
+
+    bad_image = fragment.find("img", alt="Bad image")
+    assert bad_image is not None
+    assert "src" not in bad_image.attrs
+    assert not any(attr.startswith("on") for attr in bad_image.attrs)
+
+    asset_link = fragment.find("a", string="Asset link")
+    assert asset_link is not None
+    assert asset_link.get("href") == "/assets/images/example.jpg"
+
+
+def test_body_from_html_sanitizes_iframes_and_srcset() -> None:
+    html = """
+        <html>
+            <body>
+                <div class="embed-block">
+                    <iframe
+                        srcdoc="<p>ignored</p>"
+                        src="//player.vimeo.com/video/123"
+                        onload="alert(1)"
+                    ></iframe>
+                    <img
+                        src="/assets/images/example.jpg"
+                        srcset="/assets/images/example.jpg 1x, javascript:alert(2) 2x, https://cdn.example.com/example-2x.jpg 2x"
+                        alt="Example"
+                        onclick="alert(3)"
+                    />
+                    <img
+                        src="/assets/images/drop.jpg"
+                        srcset="javascript:alert(4) 1x, javascript:alert(5) 2x"
+                        alt="Drop"
+                    />
+                </div>
+            </body>
+        </html>
+    """
+
+    body, body_format = body_from_html(html)
+    assert body_format == "html"
+
+    fragment = BeautifulSoup(body, "html.parser")
+    iframe = fragment.find("iframe")
+    assert iframe is not None
+    assert iframe.get("src") == "https://player.vimeo.com/video/123"
+    assert "srcdoc" not in iframe.attrs
+    assert "sandbox" in iframe.attrs
+
+    safe_image = fragment.find("img", alt="Example")
+    assert safe_image is not None
+    assert safe_image.get("src") == "/assets/images/example.jpg"
+    assert (
+        safe_image.get("srcset")
+        == "/assets/images/example.jpg 1x, https://cdn.example.com/example-2x.jpg 2x"
+    )
+    assert not any(attr.startswith("on") for attr in safe_image.attrs)
+
+    dropped_image = fragment.find("img", alt="Drop")
+    assert dropped_image is not None
+    assert "srcset" not in dropped_image.attrs
 
 
 def test_generate_astro_project_creates_pages_posts_and_manifest(
@@ -1261,6 +1390,98 @@ def test_generate_astro_project_rewrites_alias_urls_to_one_canonical_asset(
     assert len(list((output_dir / "public/assets/images").iterdir())) == 1
 
 
+def test_generate_astro_project_leaves_legacy_asset_manifest_unchanged_by_default(
+    tmp_path: Path,
+) -> None:
+    snapshot_dir = tmp_path / "snapshot"
+    raw_html_dir = snapshot_dir / "raw-html"
+    raw_html_dir.mkdir(parents=True)
+
+    legacy_relative_path = (
+        "downloaded-assets/images/still-tom-cc-large-db0f0226d1de.webp"
+    )
+    legacy_file = snapshot_dir / legacy_relative_path
+    legacy_file.parent.mkdir(parents=True, exist_ok=True)
+    legacy_file.write_bytes(b"legacy-image")
+
+    write_text(
+        raw_html_dir / "projects__be-water.html",
+        '<html><body><main><img src="https://images.squarespace-cdn.com/content/still-tom-cc.png?format=1000w" alt="" /></main></body></html>',
+    )
+
+    legacy_manifest = AssetManifest(
+        generated_at="2026-04-05T00:00:00+00:00",
+        items=[
+            DownloadedAsset(
+                source_url="https://images.squarespace-cdn.com/content/still-tom-cc.png?format=1000w",
+                final_url="https://images.squarespace-cdn.com/content/still-tom-cc.png?format=1000w",
+                asset_type="image",
+                owner_route="/projects/be-water",
+                group_key="img-7",
+                filename="still-tom-cc-large-db0f0226d1de.webp",
+                local_path=legacy_relative_path,
+                public_path="/assets/images/still-tom-cc-large-db0f0226d1de.webp",
+                canonical_id="db0f0226d1de1111111111111111111111111111111111111111111111111111",
+                sha256="db0f0226d1de1111111111111111111111111111111111111111111111111111",
+                variant_hint="large",
+            )
+        ],
+    )
+    write_json(snapshot_dir / "asset_manifest.json", legacy_manifest)
+    original_manifest = read_json(snapshot_dir / "asset_manifest.json")
+
+    snapshot = CrawlSnapshot(
+        generated_at="2026-04-05T00:00:00+00:00",
+        target_url="https://example.com/",
+        base_url="https://example.com/",
+        probe=SiteProbe(
+            target_url="https://example.com/",
+            final_home_url="https://example.com/",
+            site_origin="https://example.com",
+            homepage_status_code=200,
+            homepage_title="Example Site",
+            probably_squarespace=True,
+            homepage_links=[
+                "https://example.com/",
+                "https://example.com/projects/be-water",
+            ],
+        ),
+        pages=[
+            PageSnapshot(
+                requested_url="https://example.com/projects/be-water",
+                final_url="https://example.com/projects/be-water",
+                status_code=200,
+                content_type="text/html",
+                title="Be Water — Example Site",
+                meta_description="Be Water description",
+                canonical_url="https://example.com/projects/be-water",
+                raw_html_path="raw-html/projects__be-water.html",
+            ),
+        ],
+    )
+    snapshot_path = snapshot_dir / "site_snapshot.json"
+    write_json(snapshot_path, snapshot)
+
+    output_dir = tmp_path / "astro-site"
+    result = generate_astro_project(
+        snapshot_path, output_dir, site_url="https://example.com"
+    )
+    content = (output_dir / "src/content/pages/projects--be-water.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert result.pages_written == 2
+    assert (
+        "Legacy asset_manifest.json filenames were detected but were not upgraded. Rerun generate-astro with --upgrade-legacy-assets to rewrite the manifest."
+        in result.warnings
+    )
+    assert read_json(snapshot_dir / "asset_manifest.json") == original_manifest
+    assert legacy_file.exists()
+    assert not (snapshot_dir / "downloaded-assets/images/be-water-1-large.webp").exists()
+    assert "/assets/images/still-tom-cc-large-db0f0226d1de.webp" in content
+    assert "/assets/images/be-water-1-large.webp" not in content
+
+
 def test_generate_astro_project_upgrades_legacy_asset_manifest_paths(
     tmp_path: Path,
 ) -> None:
@@ -1336,7 +1557,10 @@ def test_generate_astro_project_upgrades_legacy_asset_manifest_paths(
 
     output_dir = tmp_path / "astro-site"
     result = generate_astro_project(
-        snapshot_path, output_dir, site_url="https://example.com"
+        snapshot_path,
+        output_dir,
+        site_url="https://example.com",
+        upgrade_legacy_assets=True,
     )
     content = (output_dir / "src/content/pages/projects--be-water.md").read_text(
         encoding="utf-8"

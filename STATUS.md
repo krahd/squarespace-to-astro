@@ -1,6 +1,6 @@
 # squarespace-to-astro – Project Status
 
-Last updated: 2026-05-07 00:54
+Last updated: 2026-06-06 12:33
 
 ## Project purpose
 
@@ -8,7 +8,7 @@ squarespace-to-astro (`s2a`) is a Python 3.11+ CLI for extracting content from S
 
 ## Current implementation state
 
-The project is currently at version `0.5.7` in the status snapshot. It is distributed as a pip package, standalone binary bundles for macOS arm64 and Linux x86_64, and through the `krahd/homebrew-tap` Homebrew tap.
+The project is currently at version `0.5.7` in the status snapshot. It is distributed as a pip package, standalone binary bundles for macOS arm64 and Linux x86_64, and through the `krahd/homebrew-tap` Homebrew tap. Windows installs are source-based until a Windows binary workflow is added.
 
 The CLI exposes six user-facing commands:
 
@@ -19,9 +19,9 @@ The CLI exposes six user-facing commands:
 - `s2a generate-astro`
 - `s2a migrate`
 
-Generation and migration support `--fidelity-mode`, `--layout-strategy`, `--choose-layout-strategy`, and `--markdown`. Component reconstruction covers portfolio grids, gallery blocks, Fluid Engine sections, and classic-editor layouts.
+Generation and migration support `--fidelity-mode`, `--layout-strategy`, `--choose-layout-strategy`, and `--markdown`. Component reconstruction covers portfolio grids, gallery blocks, Fluid Engine sections, and classic-editor layouts. Probe, crawl, and migrate validate supplied or captured storage-state files before applying cookies. Crawl output directories are normalised as `Path` values, Atom feeds prefer alternate links, and Squarespace asset hosts are matched by exact host or subdomain.
 
-Localized assets use readable route-based public filenames, with `asset_manifest.json` recording alias URLs and content-hash deduplication metadata. Legacy hash-suffixed manifests are upgraded automatically during generation. Redirect generation is available via `--emit-redirects` and writes redirect JSON, a Netlify `_redirects` file, and a redirect report.
+Localized assets use readable route-based public filenames, with `asset_manifest.json` recording alias URLs and content-hash deduplication metadata. Legacy hash-suffixed manifests are upgraded only when `generate-astro --upgrade-legacy-assets` is passed; default `generate-astro` and `migrate` runs leave input manifests untouched and warn when legacy filenames are detected. Redirect generation is available via `--emit-redirects`, maps source URL paths to generated routes without query strings, and failures now surface warnings instead of disappearing. `--clean` removes only the Astro output directory, with safety checks that reject `/`, the current working directory, and the home directory.
 
 ## Active focus
 
@@ -112,6 +112,13 @@ python scripts/build_binary_release.py
 
 ## Recent changes
 
+- The Astro generator now renders `astro.config.mjs` string values with JSON escaping and sanitizes generated HTML, including event-handler attributes, `javascript:` URLs, iframe `srcdoc`, iframe `sandbox`, and unsafe `srcset` candidates.
+- `generate-astro` now keeps legacy asset-manifest upgrades opt-in via `--upgrade-legacy-assets`, adds safe `--clean` deletion for Astro output directories, and surfaces redirect/report failures as warnings instead of swallowing them.
+- `probe`, `crawl`, and `migrate` now validate any supplied or captured storage-state file before applying cookies.
+- The crawler now normalises output directories as `Path` objects, prefers Atom alternate links, and matches Squarespace asset hosts by exact host or subdomain.
+- WordPress XML import now uses `defusedxml` for XML parsing, and the duplicate temporary-file cleanup loop in asset download handling was removed.
+- CI now tests Python 3.11, 3.12, and 3.13, pins Node 20 in both GitHub Actions workflows, and treats generated Astro install/build failures as fatal with explicit `dist/` checks.
+- Release and installation docs now state that standalone bundles cover macOS arm64 and Linux x86_64 only; Windows users are directed to source installs until a Windows binary workflow is added.
 - The static project website in `docs/` was refreshed with current `v0.5.7` messaging, updated migration guidance, and an improved responsive visual design.
 - `v0.5.7` added CI Node-backed Astro build smoke testing, redirect summary/report output, identity redirect filtering, RSS feed crawl seeding fallback, sparse-sitemap guidance improvements, and auth storage-state staleness checks.
 - `v0.5.6` included post-release housekeeping and older release/tag removal.
@@ -120,14 +127,14 @@ python scripts/build_binary_release.py
 
 ## Tests and verification status
 
-Previously recorded latest validation:
+Latest local verification:
 
-- `python -m pytest -q` -> 71 passed, 0 failed on 2026-05-06.
-- CI runs tests and installs Playwright browsers on push.
+- `/private/tmp/s2a-test-venv/bin/python -m pytest tests/test_auth.py tests/test_cli.py tests/test_assets.py tests/test_xml_import.py -q` -> 43 passed.
+- `/private/tmp/s2a-test-venv/bin/python -m pytest tests/test_crawl.py -q` -> 1 passed.
+- `/private/tmp/s2a-test-venv/bin/python -m pytest -q` -> 83 passed, 1 failed for the same generated-site `npm install` network error.
+- CI now runs Python 3.11-3.13, Node 20, and the generated Astro smoke workflow separately.
 - Binary bundles are built with PyInstaller for macOS arm64 and Linux x86_64.
 - Homebrew formula is rendered by `scripts/render_homebrew_formula.py` and published to `krahd/homebrew-tap`.
-
-No tests were run while creating this documentation-only status normalisation.
 
 ## Known issues, risks, and limitations
 
@@ -144,6 +151,7 @@ Current risks:
 - Real-world Squarespace layouts vary widely and need broad fixture coverage.
 - Browser-auth storage state can be sensitive and must not be leaked.
 - Generated-site fidelity remains a continuing improvement area for complex homepages, folders, and index-style pages.
+- Generated-site build verification still depends on live npm registry access when a generated project has no lockfile, so offline environments will fail `npm install`.
 
 ## Pending tasks
 
@@ -168,7 +176,6 @@ Current risks:
 - The supported external interface is the `s2a` CLI.
 - Internal Python modules may change between releases unless explicitly documented as stable.
 - Migration output prioritises editability while offering fidelity controls for layout-heavy pages.
-
 ---
 
-Last updated: 2026-05-07 00:54
+Last updated: 2026-06-06 12:33

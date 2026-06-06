@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 from urllib.parse import urlsplit
-import xml.etree.ElementTree as ET
+
+try:
+    from defusedxml import ElementTree as ET
+except ImportError:  # pragma: no cover - fallback for environments without the optional dependency
+    import xml.etree.ElementTree as ET
 
 from s2a.normalize.models import WordPressExport, WordPressItem
 

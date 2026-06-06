@@ -7,6 +7,7 @@ from s2a.extract.assets import (
     download_snapshot_assets,
     estimate_snapshot_asset_download,
     extract_asset_references,
+    is_squarespace_asset_url,
     upgrade_legacy_asset_manifest,
 )
 from s2a.files import read_json, write_json
@@ -83,6 +84,20 @@ def test_extract_asset_references_discovers_media_files_and_backgrounds() -> Non
     assert file_reference.asset_type == "file"
     assert file_reference.link_text == "Guide PDF"
     assert background_reference.variant_hint == "large"
+
+
+def test_is_squarespace_asset_url_matches_exact_hosts_and_subdomains() -> None:
+    assert is_squarespace_asset_url(
+        "https://static1.squarespace.com/media/clip.mp4"
+    )
+    assert is_squarespace_asset_url(
+        "https://images.squarespace-cdn.com/content/hero.jpg"
+    )
+    assert is_squarespace_asset_url(
+        "https://foo.images.squarespace-cdn.com/content/hero.jpg"
+    )
+    assert not is_squarespace_asset_url("https://not-squarespace.com/image.jpg")
+    assert not is_squarespace_asset_url("https://squarespace.com.evil.test/image.jpg")
 
 
 def test_extract_asset_references_prefers_lazy_loaded_media_attributes() -> None:

@@ -509,22 +509,6 @@ def download_snapshot_assets(
             except Exception:
                 # Best-effort cleanup; ignore errors.
                 pass
-        # Cleanup temporary files for non-representative group members.
-        for entry in group:
-            try:
-                temp = entry.temp_path
-                if (
-                    temp
-                    and temp.exists()
-                    and (
-                        representative.temp_path is None
-                        or temp != representative.temp_path
-                    )
-                ):
-                    temp.unlink(missing_ok=True)
-            except Exception:
-                # Best-effort cleanup; ignore errors.
-                pass
         item = DownloadedAsset(
             source_url=representative.asset.source_url,
             final_url=representative.final_url,
@@ -923,7 +907,10 @@ def is_downloadable_asset_url(url: str) -> bool:
 
 def is_squarespace_asset_url(url: str) -> bool:
     host = urlsplit(url).netloc.lower()
-    return any(marker in host for marker in SQUARESPACE_HOST_MARKERS)
+    return any(
+        host == marker or host.endswith(f".{marker}")
+        for marker in SQUARESPACE_HOST_MARKERS
+    )
 
 
 def group_downloaded_assets(

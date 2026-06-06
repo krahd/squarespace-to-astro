@@ -28,7 +28,9 @@ This path installs the bundled binary release and does not require a separate Py
 
 ### Standalone release archive
 
-If you are on Windows or another environment where Homebrew is not the right fit, download the archive for your platform from [GitHub Releases](https://github.com/krahd/squarespace-to-astro/releases), unpack it, and run the bundled `s2a` executable.
+If you are on macOS arm64 or Linux x86_64, download the archive for your platform from [GitHub Releases](https://github.com/krahd/squarespace-to-astro/releases), unpack it, and run the bundled `s2a` executable.
+
+Windows users should install from source until a Windows binary workflow is added.
 
 The standalone bundles already include the Chromium payload used by `auth-browser`.
 
@@ -39,7 +41,7 @@ If you need to run s2a from source instead of using Homebrew or the standalone b
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install "git+https://github.com/krahd/squarespace-to-astro.git@v0.5.2"
+pip install "git+https://github.com/krahd/squarespace-to-astro.git@v0.5.7"
 python -m playwright install chromium
 ```
 
@@ -77,6 +79,8 @@ During `crawl` and `migrate`, s2a now estimates the Squarespace-hosted asset dow
 - use `-y` or `--yes` to auto-confirm that prompt for non-interactive runs
 - use `-q` or `--quiet` to suppress progress bars and final summaries while still allowing prompts and fatal errors
 - if you decline the prompt, s2a keeps the crawl artifacts it already wrote; `migrate` stops before Astro generation for that run
+
+If you add `--clean` to `migrate`, s2a removes only the Astro output directory before writing the generated project. That means `--astro-dir` is cleaned when you set it explicitly; otherwise the default `<output-dir>/astro-site` directory is cleaned. The crawl output directory itself is left intact.
 
 ## Authentication and private content
 
@@ -140,7 +144,7 @@ The other files depend on the command you run.
 - `report.json`
 - `downloaded-assets/`
   Stores localized files under deterministic family directories (`images/`, `videos/`, `audio/`, and `files/`). Media assets are named from the page route with stable per-page numbering such as `barcelona-1.webp` or `barcelona-2-poster.jpg`, while downloadable files keep readable names such as `pricing-guide.pdf`. When Squarespace exposes multiple width-specific variants inside the same size bucket, the filename keeps the width token instead of falling back to a bare counter, for example `barcelona-1-large-1500w.webp`. When two Squarespace asset URLs resolve to identical content, the crawler keeps one canonical file and reuses that path everywhere. The extension matches the bytes actually returned by Squarespace, so CDN-optimized images may end up as `.webp` even when the original URL looked like `.jpg` or `.png`.
-  Older snapshot folders that still use hash-suffixed localized filenames are upgraded automatically during `generate-astro`, so hashes remain internal manifest metadata for deduplication rather than part of the public asset path.
+  Older snapshot folders that still use hash-suffixed localized filenames are left untouched by default during `generate-astro`. Pass `--upgrade-legacy-assets` if you want the snapshot-root manifest rewritten to the current route-based naming scheme.
 - `raw-html/`
 - `raw-json/`
 
@@ -194,10 +198,12 @@ s2a generate-astro ./site-output/example/site_snapshot.json \
   --output-dir ./generated/example-site \
   --fidelity-mode high \
   --layout-strategy hybrid \
-  --markdown
-
-To emit redirect mappings for the generated site (a `redirects.json` and a Netlify `_redirects` file), pass `--emit-redirects` to `generate-astro` and the generator will write the files into the output directory alongside the generated site.
+  --markdown \
+  --clean
 ```
+
+To emit redirect mappings for the generated site (a `redirects.json` and a Netlify `_redirects` file), pass `--emit-redirects` to `generate-astro`. If the snapshot root still contains a legacy hash-suffixed `asset_manifest.json` and you want it rewritten in place, add `--upgrade-legacy-assets` as well.
+Redirect generation maps source URL paths to generated routes and intentionally ignores query strings.
 
 Generation controls:
 
@@ -205,6 +211,8 @@ Generation controls:
 - `--layout-strategy hybrid|components`: chooses how layout-heavy pages are handled. `hybrid` preserves more original Squarespace HTML and embedded layout styling; `components` rebuilds supported portfolio grids, gallery blocks, Fluid Engine sections, and classic-editor row/column layouts into Astro-friendly markup.
 - `--choose-layout-strategy`: prompts at runtime instead of silently using the default strategy.
 - `-md`, `--markdown`: prefers Markdown output when the conversion is clean, but still keeps HTML for layout-heavy content such as galleries, embeds, and Fluid Engine sections.
+- `--upgrade-legacy-assets`: rewrites legacy snapshot-root `asset_manifest.json` filenames before generating the Astro project.
+- `--clean`: removes the Astro output directory before writing the generated project. Path safety checks prevent deleting `/`, the current working directory, or the home directory.
 
 ## Edit the generated Astro site
 
@@ -227,7 +235,7 @@ Most hand edits happen in these locations:
 
 ## Troubleshooting
 
-- Homebrew support currently covers macOS arm64 and Linux x86_64. Use the standalone release archive or source install on other platforms.
+- Homebrew support currently covers macOS arm64 and Linux x86_64. Standalone release archives currently cover macOS arm64 and Linux x86_64 only; Windows users should install from source until a Windows binary workflow is added.
 - The binary bundles are large because they include a Playwright Chromium payload for `auth-browser`.
 - `python -m playwright install chromium` is only required for source-based installs.
 - If you see `ERR_CERT_COMMON_NAME_INVALID`, verify the site URL first. Squarespace preview domains usually look like `https://site.squarespace.com`; a multi-label host such as `https://foo.bar.squarespace.com` will not match Squarespace's wildcard certificate.

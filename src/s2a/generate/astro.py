@@ -14,7 +14,7 @@ from bs4 import BeautifulSoup, Comment, Tag
 from markdownify import markdownify
 import yaml
 
-from s2a.extract.assets import upgrade_legacy_asset_manifest
+from s2a.extract.assets import manifest_asset_entry, upgrade_legacy_asset_manifest
 from s2a.files import read_json, write_json, write_text
 from s2a.normalize.models import (
     AstroGenerationResult,
@@ -76,6 +76,10 @@ FLUID_BLOCK_DESKTOP_STYLE_PATTERN = re.compile(
     r"@media\s*\(min-width:\s*768px\)\s*\{\s*\.(?P<block>fe-block-[A-Za-z0-9_]+)\s*\{\s*[^{}]*?grid-area:\s*(?P<area>[^;]+);\s*z-index:\s*(?P<z>[^;]+);",
     re.S,
 )
+LEGACY_ASSET_MANIFEST_WARNING = (
+    "Legacy asset_manifest.json filenames were detected but were not upgraded. "
+    "Rerun generate-astro with --upgrade-legacy-assets to rewrite the manifest."
+)
 
 
 def generate_astro_project(
@@ -88,6 +92,7 @@ def generate_astro_project(
     fidelity_mode: str = "high",
     layout_strategy: str = "hybrid",
     markdown_first: bool = False,
+    upgrade_legacy_assets: bool = False,
 ) -> AstroGenerationResult:
     snapshot = read_json(snapshot_path)
     xml_import = read_json(xml_import_path) if xml_import_path else None
@@ -97,12 +102,15 @@ def generate_astro_project(
     )
     upgrade_warnings: list[str] = []
     if asset_manifest is not None:
-        asset_manifest, upgrade_warnings, upgraded = upgrade_legacy_asset_manifest(
-            snapshot_path.parent,
-            asset_manifest,
-        )
-        if upgraded:
-            write_json(asset_manifest_path, asset_manifest)
+        if upgrade_legacy_assets:
+            asset_manifest, upgrade_warnings, upgraded = upgrade_legacy_asset_manifest(
+                snapshot_path.parent,
+                asset_manifest,
+            )
+            if upgraded:
+                write_json(asset_manifest_path, asset_manifest)
+        elif asset_manifest_has_legacy_filenames(asset_manifest):
+            upgrade_warnings.append(LEGACY_ASSET_MANIFEST_WARNING)
 
     manifest = build_astro_manifest(
         snapshot,
@@ -135,6 +143,18 @@ def generate_astro_project(
         pages_written=len(manifest.pages),
         posts_written=len(manifest.posts),
         warnings=manifest.warnings,
+    )
+
+
+def asset_manifest_has_legacy_filenames(asset_manifest: dict) -> bool:
+    items = asset_manifest.get("items")
+    if not isinstance(items, list):
+        return False
+
+    return any(
+        manifest_asset_entry(item).legacy_hashed_filename
+        for item in items
+        if isinstance(item, dict)
     )
 
 
@@ -883,9 +903,9 @@ def render_astro_config(manifest: AstroManifest, base_path: str | None) -> str:
         "export default defineConfig({",
     ]
     if manifest.base_url:
-        lines.append(f"  site: '{manifest.base_url}',")
+        lines.append(f"  site: {json.dumps(manifest.base_url)},")
     if base_path:
-        lines.append(f"  base: '{normalize_base_path(base_path)}',")
+        lines.append(f"  base: {json.dumps(normalize_base_path(base_path))},")
     lines.append("});")
     lines.append("")
     return "\n".join(lines)
@@ -2115,6 +2135,7 @@ def extract_main_html(
             preserve_layout_styles=preserve_layout_styles,
         )
         text_length = len(" ".join(fragment.stripped_strings))
+        sanitize_generated_html(fragment)
         if text_length >= 80 or candidate == soup.body:
             return fragment.decode().strip()
 
@@ -2351,7 +2372,11 @@ def rewrite_srcset_attribute(
         value = tag.get(attribute)
         if not value:
             continue
-        tag["srcset"] = rewrite_srcset(value, asset_lookup)
+        rewritten = rewrite_srcset(value, asset_lookup)
+        if rewritten:
+            tag["srcset"] = rewritten
+        else:
+            tag.attrs.pop("srcset", None)
         break
 
     for attribute in candidate_attributes:
@@ -2367,6 +2392,8 @@ def rewrite_srcset(value: str, asset_lookup: dict[str, str]) -> str:
             continue
         parts = cleaned.split()
         url = parts[0]
+        if is_javascript_url(url):
+            continue
         descriptor = f" {parts[1]}" if len(parts) > 1 else ""
         rewritten.append(f"{asset_lookup.get(url, url)}{descriptor}")
     return ", ".join(rewritten)
@@ -2421,6 +2448,9 @@ def body_and_presentation_from_html(
         fidelity_mode=fidelity_mode,
         layout_strategy=layout_strategy,
     )
+    cleaned_fragment = BeautifulSoup(cleaned_html, "html.parser")
+    sanitize_generated_html(cleaned_fragment)
+    cleaned_html = cleaned_fragment.decode().strip()
     presentation = infer_content_presentation(
         cleaned_html,
         fidelity_mode=fidelity_mode,
@@ -2938,6 +2968,81 @@ def sanitize_component_fragment(fragment: BeautifulSoup) -> None:
         src = normalize_protocol_relative_url(iframe.get("src"))
         if src:
             iframe["src"] = src
+
+    sanitize_generated_html(fragment)
+
+
+def sanitize_generated_html(fragment: BeautifulSoup) -> None:
+    for tag in fragment.find_all(True):
+        sanitize_generated_tag(tag)
+
+
+def sanitize_generated_tag(tag: Tag) -> None:
+    for attribute in list(tag.attrs):
+        normalized_attribute = attribute.lower()
+        if normalized_attribute.startswith("on"):
+            tag.attrs.pop(attribute, None)
+            continue
+
+        if normalized_attribute == "srcset":
+            sanitized_srcset = sanitize_srcset(tag.get(attribute))
+            if sanitized_srcset:
+                tag[attribute] = sanitized_srcset
+            else:
+                tag.attrs.pop(attribute, None)
+            continue
+
+        if normalized_attribute not in {
+            "href",
+            "src",
+            "poster",
+            "action",
+            "formaction",
+            "xlink:href",
+        }:
+            continue
+
+        value = tag.get(attribute)
+        if is_javascript_url(value):
+            tag.attrs.pop(attribute, None)
+            continue
+
+        if normalized_attribute in {"src", "poster"}:
+            normalized_value = normalize_protocol_relative_url(
+                value if isinstance(value, str) else None
+            )
+            if normalized_value:
+                tag[attribute] = normalized_value
+
+    if tag.name == "iframe":
+        tag.attrs.pop("srcdoc", None)
+        if not tag.has_attr("sandbox"):
+            tag["sandbox"] = ""
+
+
+def sanitize_srcset(value: str | None) -> str | None:
+    if not value:
+        return None
+
+    rewritten: list[str] = []
+    for candidate in value.split(","):
+        cleaned = candidate.strip()
+        if not cleaned:
+            continue
+        parts = cleaned.split()
+        if not parts:
+            continue
+        url = parts[0]
+        if is_javascript_url(url):
+            continue
+        descriptor = f" {parts[1]}" if len(parts) > 1 else ""
+        rewritten.append(f"{url}{descriptor}")
+
+    return ", ".join(rewritten) or None
+
+
+def is_javascript_url(value: str | None) -> bool:
+    return bool(value) and value.strip().lower().startswith("javascript:")
 
 
 def cleanup_media_tag(tag: Tag) -> None:

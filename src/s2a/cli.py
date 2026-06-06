@@ -4,6 +4,7 @@ import argparse
 from dataclasses import dataclass
 import os
 import re
+import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Sequence
@@ -17,6 +18,7 @@ from s2a.extract.assets import (
     estimate_snapshot_asset_download,
 )
 from s2a.extract.auth import apply_storage_state_cookies, capture_storage_state
+from s2a.extract.auth import check_storage_state
 from s2a.extract.crawl import crawl_site
 from s2a.extract.xml_import import import_wordpress_xml
 from s2a.files import write_json, read_json
@@ -54,6 +56,7 @@ def generate_astro_project(
     fidelity_mode: str = "high",
     layout_strategy: str = "hybrid",
     markdown_first: bool = False,
+    upgrade_legacy_assets: bool = False,
 ) -> AstroGenerationResult:
     kwargs: dict[str, Any] = {
         "snapshot_path": snapshot_path,
@@ -65,6 +68,7 @@ def generate_astro_project(
         "fidelity_mode": fidelity_mode,
         "layout_strategy": layout_strategy,
         "markdown_first": markdown_first,
+        "upgrade_legacy_assets": upgrade_legacy_assets,
     }
     return _generate_astro_project(**kwargs)
 
@@ -232,6 +236,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Emit redirects.json and netlify/_redirects for the generated site.",
     )
+    astro_parser.add_argument(
+        "--upgrade-legacy-assets",
+        action="store_true",
+        help="Upgrade legacy asset_manifest.json filenames in the snapshot root before generating the Astro project.",
+    )
+    astro_parser.add_argument(
+        "--clean",
+        action="store_true",
+        help="Remove the Astro output directory before writing the generated project.",
+    )
     add_fidelity_arguments(astro_parser)
 
     migrate_parser = subparsers.add_parser(
@@ -278,6 +292,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--emit-redirects",
         action="store_true",
         help="Emit redirects.json and netlify/_redirects when generate-astro runs inside migrate.",
+    )
+    migrate_parser.add_argument(
+        "--clean",
+        action="store_true",
+        help="Remove the Astro output directory before writing the generated project.",
     )
 
     return parser
@@ -459,6 +478,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.command == "generate-astro":
+        if getattr(args, "clean", False):
+            try:
+                clean_output_dir(
+                    output_dir, protected_paths=[Path(args.snapshot).parent]
+                )
+            except (OSError, ValueError) as exc:
+                console.emit(f"Warning: {exc}", always=True)
+                return 1
         output_dir.mkdir(parents=True, exist_ok=True)
         fidelity_mode, layout_strategy, markdown_first = resolve_generation_options(
             console, args
@@ -482,6 +509,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 fidelity_mode=fidelity_mode,
                 layout_strategy=layout_strategy,
                 markdown_first=markdown_first,
+                upgrade_legacy_assets=args.upgrade_legacy_assets,
             )
         except AssetManifestUpgradeError as exc:
             console.emit(str(exc), always=True)
@@ -512,9 +540,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "warnings": manifest.get("warnings", []),
             }
             write_json(output_dir / "migration-report.json", report_summary)
-        except Exception:
+        except Exception as exc:
             # Non-fatal: do not block generation on report serialization
-            pass
+            console.emit(f"Warning: failed to write migration report: {exc}")
         # Optionally emit redirects based on the generated migration manifest
         if getattr(args, "emit_redirects", False):
             try:
@@ -524,9 +552,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 write_redirects_json(output_dir, redirects)
                 write_netlify_redirects(output_dir, redirects)
                 write_redirect_report(output_dir, redirects, summary)
-            except Exception:
+            except Exception as exc:
                 # Non-fatal: redirect generation should not block normal output
-                pass
+                console.emit(f"Warning: failed to emit redirects: {exc}", always=True)
         write_execution_metadata(
             output_dir,
             args,
@@ -581,6 +609,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         username=username,
         password=password,
     )
+    if storage_state_path is not None:
+        emit_storage_state_warnings(console, storage_state_path)
 
     with build_client(args.timeout, verify=not args.insecure) as client:
         if storage_state_path:
@@ -607,7 +637,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             snapshot = crawl_site(
                 client,
                 probe,
-                str(output_dir),
+                output_dir,
                 max_pages=args.max_pages,
                 progress_callback=console.progress_callback("Crawling pages"),
             )
@@ -646,7 +676,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             snapshot = crawl_site(
                 client,
                 probe,
-                str(output_dir),
+                output_dir,
                 max_pages=args.max_pages,
                 progress_callback=console.progress_callback("Crawling pages"),
             )
@@ -681,6 +711,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             astro_dir = (
                 Path(args.astro_dir) if args.astro_dir else output_dir / "astro-site"
             )
+            if getattr(args, "clean", False):
+                try:
+                    clean_output_dir(astro_dir, protected_paths=[output_dir])
+                except (OSError, ValueError) as exc:
+                    console.emit(f"Warning: {exc}", always=True)
+                    return 1
             astro_dir.mkdir(parents=True, exist_ok=True)
             fidelity_mode, layout_strategy, markdown_first = resolve_generation_options(
                 console, args
@@ -699,6 +735,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     fidelity_mode=fidelity_mode,
                     layout_strategy=layout_strategy,
                     markdown_first=markdown_first,
+                    upgrade_legacy_assets=False,
                 )
             except AssetManifestUpgradeError as exc:
                 console.emit(str(exc), always=True)
@@ -713,8 +750,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     write_redirects_json(astro_dir, redirects)
                     write_netlify_redirects(astro_dir, redirects)
                     write_redirect_report(astro_dir, redirects, summary)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    console.emit(f"Warning: failed to emit redirects: {exc}", always=True)
             write_execution_metadata(
                 output_dir,
                 args,
@@ -779,6 +816,11 @@ def prepare_storage_state(
     return output_dir / report.storage_state_path
 
 
+def emit_storage_state_warnings(console: Console, storage_state_path: Path) -> None:
+    for warning in check_storage_state(storage_state_path):
+        console.emit(f"Warning: {warning}", always=True)
+
+
 def resolve_xml_input(
     xml_import_path: str | None, xml_export_path: str | None, work_dir: Path
 ) -> Path | None:
@@ -816,6 +858,53 @@ def resolve_output_dir(args: argparse.Namespace) -> tuple[Path, bool]:
 
 def build_default_output_dir(command: str, label: str) -> Path:
     return Path("site-output") / f"{output_dir_timestamp()}-{command}-{label}"
+
+
+def clean_output_dir(
+    output_dir: Path, *, protected_paths: Sequence[Path] = ()
+) -> None:
+    validate_clean_output_dir(output_dir, protected_paths=protected_paths)
+    if output_dir.is_symlink():
+        output_dir.unlink()
+        return
+
+    if not output_dir.exists():
+        return
+
+    if output_dir.is_file():
+        output_dir.unlink()
+        return
+
+    shutil.rmtree(output_dir)
+
+
+def validate_clean_output_dir(
+    output_dir: Path, *, protected_paths: Sequence[Path] = ()
+) -> Path:
+    if not str(output_dir).strip():
+        raise ValueError("refusing to clean an empty path")
+
+    resolved_output_dir = output_dir.expanduser().resolve(strict=False)
+    forbidden_paths = {
+        Path("/").resolve(),
+        Path.cwd().resolve(),
+        Path.home().resolve(),
+    }
+    if resolved_output_dir in forbidden_paths:
+        raise ValueError(f"refusing to clean dangerous path {resolved_output_dir}")
+
+    for protected_path in protected_paths:
+        resolved_protected_path = protected_path.expanduser().resolve(strict=False)
+        if resolved_protected_path == resolved_output_dir:
+            raise ValueError(
+                f"refusing to clean {resolved_output_dir} because it would delete the protected path {resolved_protected_path}"
+            )
+        if resolved_protected_path.is_relative_to(resolved_output_dir):
+            raise ValueError(
+                f"refusing to clean {resolved_output_dir} because it contains the protected path {resolved_protected_path}"
+            )
+
+    return resolved_output_dir
 
 
 def output_dir_timestamp() -> str:

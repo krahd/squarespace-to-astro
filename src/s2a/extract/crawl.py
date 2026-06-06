@@ -28,10 +28,11 @@ ProgressCallback = Callable[[int, int, str | None], None]
 def crawl_site(
     client: httpx.Client,
     probe: SiteProbe,
-    output_dir: str,
+    output_dir: Path | str,
     max_pages: int = 50,
     progress_callback: ProgressCallback | None = None,
 ) -> CrawlSnapshot:
+    output_root = Path(output_dir)
     crawl_warnings: list[str] = []
     queue = deque(seed_urls_from_probe(probe))
 
@@ -104,7 +105,7 @@ def crawl_site(
         json_probe = None
 
         if fetch.text:
-            html_path = store_raw_html(output_dir, final_url, fetch.text)
+            html_path = store_raw_html(output_root, final_url, fetch.text)
 
         if not is_html_content_type(fetch.content_type):
             page_warnings.append(
@@ -136,7 +137,7 @@ def crawl_site(
 
             json_probe, json_payload = probe_json_data(client, final_url)
             if json_probe.available and json_payload is not None:
-                json_path = store_raw_json(output_dir, final_url, json_payload)
+                json_path = store_raw_json(output_root, final_url, json_payload)
 
         pages.append(
             PageSnapshot(
@@ -228,9 +229,9 @@ def extract_urls_from_rss_feeds(
                 if is_crawlable_link(url, site_origin):
                     discovered.append(url)
         for entry in root.iter("{http://www.w3.org/2005/Atom}entry"):
-            link_el = entry.find("atom:link[@rel='alternate']", ns) or entry.find(
-                "{http://www.w3.org/2005/Atom}link"
-            )
+            link_el = entry.find("atom:link[@rel='alternate']", ns)
+            if link_el is None:
+                link_el = entry.find("{http://www.w3.org/2005/Atom}link")
             if link_el is not None:
                 href = link_el.get("href", "")
                 if href:
@@ -240,17 +241,17 @@ def extract_urls_from_rss_feeds(
     return list(dict.fromkeys(discovered))
 
 
-def store_raw_html(output_dir: str, url: str, html: str) -> str:
+def store_raw_html(output_dir: Path, url: str, html: str) -> str:
     stem = file_stem_for_url(url)
-    path = f"{output_dir}/raw-html/{stem}.html"
-    write_text(Path(path), html)
+    path = output_dir / "raw-html" / f"{stem}.html"
+    write_text(path, html)
     return f"raw-html/{stem}.html"
 
 
-def store_raw_json(output_dir: str, url: str, payload: dict) -> str:
+def store_raw_json(output_dir: Path, url: str, payload: dict) -> str:
     stem = file_stem_for_url(url)
-    path = f"{output_dir}/raw-json/{stem}.json"
-    write_json(Path(path), payload)
+    path = output_dir / "raw-json" / f"{stem}.json"
+    write_json(path, payload)
     return f"raw-json/{stem}.json"
 
 

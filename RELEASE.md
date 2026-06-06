@@ -57,7 +57,8 @@ Current bundle targets are:
 
 - Linux
 - macOS
-- Windows
+
+Windows is not currently built by this workflow; Windows users should install from source until a Windows binary workflow is added.
 
 ## Homebrew tap publication
 

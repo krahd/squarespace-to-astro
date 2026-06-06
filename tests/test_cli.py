@@ -115,6 +115,17 @@ def make_asset_estimate() -> AssetDownloadEstimate:
     )
 
 
+def make_astro_result(output_dir: Path) -> AstroGenerationResult:
+    return AstroGenerationResult(
+        generated_at="2026-04-05T00:00:00+00:00",
+        output_dir=str(output_dir),
+        manifest_path="migration-manifest.json",
+        pages_written=1,
+        posts_written=0,
+        warnings=[],
+    )
+
+
 def test_resolve_auth_credentials_uses_env_vars(monkeypatch) -> None:
     monkeypatch.setenv("SQUARESPACE_USER", "env@example.com")
     monkeypatch.setenv("SQUARESPACE_PWD", "env-password")
@@ -322,6 +333,8 @@ def test_build_parser_accepts_fidelity_flags_for_generate_astro_and_migrate() ->
             "--layout-strategy",
             "components",
             "--markdown",
+            "--upgrade-legacy-assets",
+            "--clean",
         ]
     )
     migrate_args = parser.parse_args(
@@ -329,13 +342,72 @@ def test_build_parser_accepts_fidelity_flags_for_generate_astro_and_migrate() ->
             "migrate",
             "https://example.com",
             "--choose-layout-strategy",
+            "--clean",
         ]
     )
 
     assert generate_args.fidelity_mode == "balanced"
     assert generate_args.layout_strategy == "components"
     assert generate_args.markdown_first is True
+    assert generate_args.upgrade_legacy_assets is True
+    assert generate_args.clean is True
     assert migrate_args.choose_layout_strategy is True
+    assert migrate_args.clean is True
+    assert not hasattr(migrate_args, "upgrade_legacy_assets")
+
+
+def test_probe_main_checks_storage_state_warnings_before_network_work(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    storage_state = tmp_path / "storage_state.json"
+    cli.write_json(storage_state, {"cookies": [], "origins": []})
+    events: list[str] = []
+
+    class TrackingClientContext:
+        def __enter__(self) -> object:
+            events.append("build_client")
+            assert events[0] == "check"
+            return object()
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+    def fake_check_storage_state(path: Path) -> list[str]:
+        events.append("check")
+        assert path == storage_state
+        return ["Storage state file contains no cookies."]
+
+    def fake_apply_storage_state_cookies(client, path) -> None:
+        events.append("apply")
+        assert path == storage_state
+
+    def fake_probe_site(*args, **kwargs):
+        events.append("probe")
+        return make_probe()
+
+    monkeypatch.setattr(cli, "check_storage_state", fake_check_storage_state)
+    monkeypatch.setattr(
+        cli, "build_client", lambda *args, **kwargs: TrackingClientContext()
+    )
+    monkeypatch.setattr(cli, "apply_storage_state_cookies", fake_apply_storage_state_cookies)
+    monkeypatch.setattr(cli, "probe_site", fake_probe_site)
+
+    result = cli.main(
+        [
+            "probe",
+            "https://example.com",
+            "--output-dir",
+            str(tmp_path),
+            "--storage-state",
+            str(storage_state),
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert events == ["check", "build_client", "apply", "probe"]
+    assert "Warning: Storage state file contains no cookies." in captured.out
 
 
 def test_resolve_generation_options_prompts_for_layout_strategy(monkeypatch) -> None:
@@ -388,6 +460,7 @@ def test_generate_astro_main_passes_fidelity_settings_to_generator(
             "--layout-strategy",
             "components",
             "--markdown",
+            "--upgrade-legacy-assets",
         ]
     )
 
@@ -395,6 +468,211 @@ def test_generate_astro_main_passes_fidelity_settings_to_generator(
     assert captured["fidelity_mode"] == "balanced"
     assert captured["layout_strategy"] == "components"
     assert captured["markdown_first"] is True
+    assert captured["upgrade_legacy_assets"] is True
+
+
+def test_generate_astro_main_clean_removes_stale_files(monkeypatch, tmp_path) -> None:
+    output_dir = tmp_path / "astro-site"
+    output_dir.mkdir(parents=True)
+    (output_dir / "stale.txt").write_text("stale", encoding="utf-8")
+
+    def fake_generate_astro_project(*, snapshot_path, output_dir, **kwargs):
+        cli.write_json(
+            output_dir / "migration-manifest.json",
+            {"pages": [], "posts": []},
+        )
+        return make_astro_result(output_dir)
+
+    monkeypatch.setattr(cli, "generate_astro_project", fake_generate_astro_project)
+
+    result = cli.main(
+        [
+            "generate-astro",
+            "site_snapshot.json",
+            "--output-dir",
+            str(output_dir),
+            "--clean",
+        ]
+    )
+
+    assert result == 0
+    assert not (output_dir / "stale.txt").exists()
+    assert (output_dir / "astro_generation.json").exists()
+
+
+def test_generate_astro_main_clean_rejects_dangerous_paths(
+    monkeypatch, capsys
+) -> None:
+    monkeypatch.setattr(
+        cli,
+        "generate_astro_project",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("generate_astro_project should not be called")
+        ),
+    )
+
+    result = cli.main(
+        [
+            "generate-astro",
+            "site_snapshot.json",
+            "--output-dir",
+            "/",
+            "--clean",
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert result == 1
+    assert "refusing to clean dangerous path /" in captured.out
+
+
+def test_generate_astro_main_reports_redirect_emission_failures(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    output_dir = tmp_path / "astro-site"
+
+    def fake_generate_astro_project(*, snapshot_path, output_dir, **kwargs):
+        cli.write_json(
+            output_dir / "migration-manifest.json",
+            {"pages": [], "posts": []},
+        )
+        return make_astro_result(output_dir)
+
+    def fake_write_redirects_json(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(cli, "generate_astro_project", fake_generate_astro_project)
+    monkeypatch.setattr(cli, "write_redirects_json", fake_write_redirects_json)
+
+    result = cli.main(
+        [
+            "generate-astro",
+            "site_snapshot.json",
+            "--output-dir",
+            str(output_dir),
+            "--emit-redirects",
+        ]
+    )
+
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert "Warning: failed to emit redirects: boom" in captured.out
+
+
+def test_migrate_main_clean_removes_stale_astro_output_without_touching_crawl_output(
+    monkeypatch, tmp_path
+) -> None:
+    output_dir = tmp_path
+    astro_dir = output_dir / "astro-site"
+    astro_dir.mkdir(parents=True)
+    (astro_dir / "stale.txt").write_text("stale", encoding="utf-8")
+    (output_dir / "crawl-stale.txt").write_text("crawl", encoding="utf-8")
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        cli, "build_client", lambda *args, **kwargs: DummyClientContext()
+    )
+    monkeypatch.setattr(cli, "prepare_storage_state", lambda *args, **kwargs: None)
+    monkeypatch.setattr(cli, "probe_site", lambda *args, **kwargs: make_probe())
+    monkeypatch.setattr(cli, "crawl_site", lambda *args, **kwargs: make_snapshot())
+    monkeypatch.setattr(cli, "build_report", lambda *args, **kwargs: make_report())
+    monkeypatch.setattr(
+        cli,
+        "estimate_snapshot_asset_download",
+        lambda *args, **kwargs: make_asset_estimate(),
+    )
+
+    def fake_download_snapshot_assets(
+        _client, _snapshot, _output_dir, **_kwargs
+    ) -> AssetManifest:
+        return AssetManifest(generated_at="2026-04-05T00:00:00+00:00")
+
+    def fake_generate_astro_project(*, snapshot_path, output_dir, **kwargs):
+        captured.update(kwargs)
+        cli.write_json(
+            output_dir / "migration-manifest.json",
+            {"pages": [], "posts": []},
+        )
+        return make_astro_result(output_dir)
+
+    monkeypatch.setattr(cli, "download_snapshot_assets", fake_download_snapshot_assets)
+    monkeypatch.setattr(cli, "generate_astro_project", fake_generate_astro_project)
+
+    result = cli.main(
+        [
+            "migrate",
+            "https://example.com",
+            "--output-dir",
+            str(output_dir),
+            "--clean",
+            "--yes",
+        ]
+    )
+
+    assert result == 0
+    assert captured["upgrade_legacy_assets"] is False
+    assert not (astro_dir / "stale.txt").exists()
+    assert (output_dir / "crawl-stale.txt").exists()
+
+
+def test_migrate_main_reports_redirect_emission_failures(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    output_dir = tmp_path
+    astro_dir = output_dir / "astro-site"
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        cli, "build_client", lambda *args, **kwargs: DummyClientContext()
+    )
+    monkeypatch.setattr(cli, "prepare_storage_state", lambda *args, **kwargs: None)
+    monkeypatch.setattr(cli, "probe_site", lambda *args, **kwargs: make_probe())
+    monkeypatch.setattr(cli, "crawl_site", lambda *args, **kwargs: make_snapshot())
+    monkeypatch.setattr(cli, "build_report", lambda *args, **kwargs: make_report())
+    monkeypatch.setattr(
+        cli,
+        "estimate_snapshot_asset_download",
+        lambda *args, **kwargs: make_asset_estimate(),
+    )
+
+    def fake_download_snapshot_assets(
+        _client, _snapshot, _output_dir, **_kwargs
+    ) -> AssetManifest:
+        return AssetManifest(generated_at="2026-04-05T00:00:00+00:00")
+
+    def fake_generate_astro_project(*, snapshot_path, output_dir, **kwargs):
+        captured.update(kwargs)
+        cli.write_json(
+            output_dir / "migration-manifest.json",
+            {"pages": [], "posts": []},
+        )
+        return make_astro_result(output_dir)
+
+    def fake_write_redirects_json(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(cli, "download_snapshot_assets", fake_download_snapshot_assets)
+    monkeypatch.setattr(cli, "generate_astro_project", fake_generate_astro_project)
+    monkeypatch.setattr(cli, "write_redirects_json", fake_write_redirects_json)
+
+    result = cli.main(
+        [
+            "migrate",
+            "https://example.com",
+            "--output-dir",
+            str(output_dir),
+            "--emit-redirects",
+            "--yes",
+        ]
+    )
+
+    captured_out = capsys.readouterr().out
+
+    assert result == 0
+    assert captured["upgrade_legacy_assets"] is False
+    assert "Warning: failed to emit redirects: boom" in captured_out
 
 
 def test_crawl_main_skips_confirmation_prompt_with_yes(monkeypatch, tmp_path) -> None:
@@ -439,6 +717,47 @@ def test_crawl_main_skips_confirmation_prompt_with_yes(monkeypatch, tmp_path) ->
 
     assert result == 0
     assert calls["download"] == 1
+
+
+def test_crawl_main_passes_path_output_dir_to_crawl_site(monkeypatch, tmp_path) -> None:
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        cli, "build_client", lambda *args, **kwargs: DummyClientContext()
+    )
+    monkeypatch.setattr(cli, "prepare_storage_state", lambda *args, **kwargs: None)
+    monkeypatch.setattr(cli, "probe_site", lambda *args, **kwargs: make_probe())
+
+    def fake_crawl_site(client, probe, output_dir, **kwargs) -> CrawlSnapshot:
+        captured["output_dir"] = output_dir
+        return make_snapshot()
+
+    monkeypatch.setattr(cli, "crawl_site", fake_crawl_site)
+    monkeypatch.setattr(cli, "build_report", lambda *args, **kwargs: make_report())
+    monkeypatch.setattr(
+        cli,
+        "estimate_snapshot_asset_download",
+        lambda *args, **kwargs: make_asset_estimate(),
+    )
+    monkeypatch.setattr(
+        cli,
+        "download_snapshot_assets",
+        lambda *args, **kwargs: AssetManifest(generated_at="2026-04-05T00:00:00+00:00"),
+    )
+
+    result = cli.main(
+        [
+            "crawl",
+            "https://example.com",
+            "--output-dir",
+            str(tmp_path),
+            "--yes",
+        ]
+    )
+
+    assert result == 0
+    assert isinstance(captured["output_dir"], Path)
+    assert captured["output_dir"] == tmp_path
 
 
 def test_crawl_main_can_skip_asset_download_after_prompt(monkeypatch, tmp_path) -> None:
