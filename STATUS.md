@@ -1,6 +1,6 @@
 # squarespace-to-astro – Project Status
 
-Last updated: 2026-06-06 12:33
+Last updated: 2026-06-06 19:10
 
 ## Project purpose
 
@@ -117,7 +117,9 @@ python scripts/build_binary_release.py
 - `probe`, `crawl`, and `migrate` now validate any supplied or captured storage-state file before applying cookies.
 - The crawler now normalises output directories as `Path` objects, prefers Atom alternate links, and matches Squarespace asset hosts by exact host or subdomain.
 - WordPress XML import now uses `defusedxml` for XML parsing, and the duplicate temporary-file cleanup loop in asset download handling was removed.
-- CI now tests Python 3.11, 3.12, and 3.13, pins Node 20 in both GitHub Actions workflows, and treats generated Astro install/build failures as fatal with explicit `dist/` checks.
+- CI now tests Python 3.11, 3.12, and 3.13, pins Node 20 in both GitHub Actions workflows, restores the Playwright browser cache before installation, and treats generated Astro install/build failures as fatal with explicit `dist/` and `index.html` checks.
+- The generated-site build helper clears stale `node_modules` before `npm ci`, which keeps repeated local and CI reruns idempotent.
+- The repository README and user guide now distinguish the tagged `v0.5.7` release from `main` / next-release options, and the guide labels `--clean` and `--upgrade-legacy-assets` accordingly.
 - Release and installation docs now state that standalone bundles cover macOS arm64 and Linux x86_64 only; Windows users are directed to source installs until a Windows binary workflow is added.
 - The static project website in `docs/` was refreshed with current `v0.5.7` messaging, updated migration guidance, and an improved responsive visual design.
 - `v0.5.7` added CI Node-backed Astro build smoke testing, redirect summary/report output, identity redirect filtering, RSS feed crawl seeding fallback, sparse-sitemap guidance improvements, and auth storage-state staleness checks.
@@ -129,9 +131,8 @@ python scripts/build_binary_release.py
 
 Latest local verification:
 
-- `/private/tmp/s2a-test-venv/bin/python -m pytest tests/test_auth.py tests/test_cli.py tests/test_assets.py tests/test_xml_import.py -q` -> 43 passed.
-- `/private/tmp/s2a-test-venv/bin/python -m pytest tests/test_crawl.py -q` -> 1 passed.
-- `/private/tmp/s2a-test-venv/bin/python -m pytest -q` -> 83 passed, 1 failed for the same generated-site `npm install` network error.
+- `.venv/bin/python -m pytest -q tests/test_astro_generator.py tests/test_cli.py tests/test_generated_sites_build.py` -> 51 passed.
+- `.venv/bin/python -m pytest -q` -> 88 passed.
 - CI now runs Python 3.11-3.13, Node 20, and the generated Astro smoke workflow separately.
 - Binary bundles are built with PyInstaller for macOS arm64 and Linux x86_64.
 - Homebrew formula is rendered by `scripts/render_homebrew_formula.py` and published to `krahd/homebrew-tap`.
@@ -178,4 +179,4 @@ Current risks:
 - Migration output prioritises editability while offering fidelity controls for layout-heavy pages.
 ---
 
-Last updated: 2026-06-06 12:33
+Last updated: 2026-06-06 19:10

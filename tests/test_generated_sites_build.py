@@ -20,12 +20,23 @@ def _npm_install_command(project_dir: Path) -> list[str]:
     return ["npm", "install"]
 
 
+def _assert_non_empty_dist(project_dir: Path) -> None:
+    dist = project_dir / "dist"
+    assert dist.is_dir(), f"Expected dist/ after npm run build in {project_dir}"
+    files = [path for path in dist.rglob("*") if path.is_file()]
+    assert files, f"Expected dist/ to contain files in {project_dir}"
+    assert any(path.name == "index.html" for path in files), (
+        f"Expected dist/ to contain an index.html file in {project_dir}"
+    )
+
+
 def _build_generated_project(project_dir: Path) -> None:
+    node_modules = project_dir / "node_modules"
+    if node_modules.exists():
+        shutil.rmtree(node_modules)
     subprocess.check_call(_npm_install_command(project_dir), cwd=str(project_dir))
     subprocess.check_call(["npm", "run", "build"], cwd=str(project_dir))
-    assert (
-        project_dir / "dist"
-    ).exists(), f"Expected dist/ after npm run build in {project_dir}"
+    _assert_non_empty_dist(project_dir)
 
 
 @pytest.mark.skipif(not _has_node(), reason="Node.js/npm not available")

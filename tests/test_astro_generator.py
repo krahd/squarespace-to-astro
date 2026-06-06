@@ -10,6 +10,7 @@ from s2a.generate.astro import (
     extract_main_html,
     generate_astro_project,
     render_astro_config,
+    render_content_config,
 )
 from s2a.normalize.models import (
     AstroManifest,
@@ -55,6 +56,18 @@ def test_render_astro_config_escapes_hostile_values() -> None:
     assert f"  base: {json.dumps(base_path)}," in rendered
     assert "  site: '" not in rendered
     assert "  base: '" not in rendered
+
+
+def test_render_content_config_uses_four_space_presentation_indent() -> None:
+    for has_posts in (False, True):
+        rendered = render_content_config(has_posts)
+        presentation_lines = [
+            line for line in rendered.splitlines() if "presentation:" in line
+        ]
+        assert presentation_lines, f"Expected presentation schema lines for {has_posts=}"
+        for line in presentation_lines:
+            assert line.startswith("    presentation:"), line
+            assert not line.startswith("        presentation:"), line
 
 
 def test_extract_main_html_sanitizes_event_handlers_and_javascript_urls() -> None:

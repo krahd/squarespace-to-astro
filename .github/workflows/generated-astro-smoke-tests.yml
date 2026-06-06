@@ -68,18 +68,19 @@ jobs:
             echo "has_generated=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Install Playwright browsers
-        if: steps.detect.outputs.has_generated == 'true'
-        shell: bash
-        run: |
-          . .venv/bin/activate
-          python -m playwright install chromium
       - name: Cache Playwright browsers
         if: steps.detect.outputs.has_generated == 'true'
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
         with:
           path: .playwright-browsers
           key: ${{ runner.os }}-playwright-browsers-v1
+
+      - name: Install Playwright browsers
+        if: steps.detect.outputs.has_generated == 'true'
+        shell: bash
+        run: |
+          . .venv/bin/activate
+          python -m playwright install chromium
 
       - name: Build generated Astro projects (if present)
         if: steps.detect.outputs.has_generated == 'true'
@@ -98,6 +99,14 @@ jobs:
               npm run build
               if [ ! -d dist ]; then
                 echo "Expected dist/ after npm run build in $d" >&2
+                exit 1
+              fi
+              if ! find dist -type f | grep -q .; then
+                echo "Expected dist/ to contain files in $d" >&2
+                exit 1
+              fi
+              if ! find dist -type f -name index.html | grep -q .; then
+                echo "Expected dist/ to contain an index.html file in $d" >&2
                 exit 1
               fi
               popd
@@ -128,26 +137,27 @@ jobs:
               done
               # run Playwright check using the venv Python
               . .venv/bin/activate
-                python - <<'PY'
-                from playwright.sync_api import sync_playwright
-                import sys
-                try:
-                  with sync_playwright() as p:
-                    browser = p.chromium.launch()
-                    page = browser.new_page()
-                    page.goto("http://127.0.0.1:8000/", timeout=10000)
-                    if page.status != 200:
-                      print("Non-200 status:", page.status)
-                      sys.exit(1)
-                    content = page.content()
-                    if "<html" not in content.lower():
-                      print("Unexpected content")
-                      sys.exit(1)
-                    browser.close()
-                except Exception as e:
-                  print("Playwright error:", e)
-                  sys.exit(1)
-                PY
+              python - <<'PY'
+from playwright.sync_api import sync_playwright
+import sys
+
+try:
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page()
+        page.goto("http://127.0.0.1:8000/", timeout=10000)
+        if page.status != 200:
+            print("Non-200 status:", page.status)
+            sys.exit(1)
+        content = page.content()
+        if "<html" not in content.lower():
+            print("Unexpected content")
+            sys.exit(1)
+        browser.close()
+except Exception as e:
+    print("Playwright error:", e)
+    sys.exit(1)
+PY
               kill $PID || true
               sleep 1
             fi

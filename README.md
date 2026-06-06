@@ -3,6 +3,7 @@
 `s2a` is a Python CLI for extracting content from Squarespace and generating an editable [Astro](https://github.com/withastro/astro) project. This README is the repository entry point for developers, contributors, and advanced users who want to run the project from source or understand how the codebase is organized.
 
 Current release: `v0.5.7`.
+The `main` branch may document unreleased options listed under `[Unreleased]` in `CHANGELOG.md`.
 
 For end-user installation and day-to-day usage:
 

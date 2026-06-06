@@ -931,7 +931,7 @@ const pages = defineCollection({
     sourceUrl: z.string().url().optional(),
     canonicalUrl: z.string().url().optional(),
     bodyFormat: z.enum(['markdown', 'html']).default('markdown'),
-        presentation: z.enum(['standard', 'immersive']).default('standard'),
+    presentation: z.enum(['standard', 'immersive']).default('standard'),
     home: z.boolean().optional(),
   }),
 });
@@ -953,7 +953,7 @@ const pages = defineCollection({
     sourceUrl: z.string().url().optional(),
     canonicalUrl: z.string().url().optional(),
     bodyFormat: z.enum(['markdown', 'html']).default('markdown'),
-        presentation: z.enum(['standard', 'immersive']).default('standard'),
+    presentation: z.enum(['standard', 'immersive']).default('standard'),
     home: z.boolean().optional(),
   }),
 });

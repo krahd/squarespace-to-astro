@@ -1,5 +1,8 @@
 import argparse
+import shutil
 from pathlib import Path
+
+import pytest
 
 import s2a.cli as cli
 from s2a.extract.assets import AssetDownloadEstimate
@@ -124,6 +127,21 @@ def make_astro_result(output_dir: Path) -> AstroGenerationResult:
         posts_written=0,
         warnings=[],
     )
+
+
+def _require_symlink_support(tmp_path: Path) -> None:
+    target_dir = tmp_path / ".symlink-support-target"
+    link_path = tmp_path / ".symlink-support-link"
+    target_dir.mkdir()
+    try:
+        link_path.symlink_to(target_dir, target_is_directory=True)
+    except (OSError, NotImplementedError, AttributeError):
+        pytest.skip("Symlinks are not supported on this platform")
+    finally:
+        if link_path.exists() or link_path.is_symlink():
+            link_path.unlink()
+        if target_dir.exists():
+            shutil.rmtree(target_dir)
 
 
 def test_resolve_auth_credentials_uses_env_vars(monkeypatch) -> None:
@@ -525,6 +543,63 @@ def test_generate_astro_main_clean_rejects_dangerous_paths(
 
     assert result == 1
     assert "refusing to clean dangerous path /" in captured.out
+
+
+def test_clean_output_dir_refuses_symlink_to_protected_snapshot(
+    tmp_path: Path,
+) -> None:
+    _require_symlink_support(tmp_path)
+
+    snapshot_dir = tmp_path / "snapshot"
+    snapshot_dir.mkdir()
+    output_dir = tmp_path / "astro-site"
+    output_dir.symlink_to(snapshot_dir, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="protected path"):
+        cli.clean_output_dir(output_dir, protected_paths=[snapshot_dir])
+
+    assert output_dir.is_symlink()
+    assert snapshot_dir.exists()
+
+
+def test_clean_output_dir_unlinks_non_protected_symlink_without_deleting_target(
+    tmp_path: Path,
+) -> None:
+    _require_symlink_support(tmp_path)
+
+    target_dir = tmp_path / "target"
+    target_dir.mkdir()
+    (target_dir / "keep.txt").write_text("keep", encoding="utf-8")
+    output_dir = tmp_path / "astro-site"
+    output_dir.symlink_to(target_dir, target_is_directory=True)
+
+    cli.clean_output_dir(output_dir)
+
+    assert not output_dir.exists()
+    assert target_dir.exists()
+    assert (target_dir / "keep.txt").exists()
+
+
+def test_shutil_rmtree_removes_symlink_entry_without_deleting_target(
+    tmp_path: Path,
+) -> None:
+    _require_symlink_support(tmp_path)
+
+    output_dir = tmp_path / "astro-site"
+    output_dir.mkdir()
+    target_dir = tmp_path / "target"
+    target_dir.mkdir()
+    (target_dir / "keep.txt").write_text("keep", encoding="utf-8")
+    child_link = output_dir / "linked-child"
+    child_link.symlink_to(target_dir, target_is_directory=True)
+
+    assert child_link.is_symlink()
+
+    shutil.rmtree(output_dir)
+
+    assert not output_dir.exists()
+    assert target_dir.exists()
+    assert (target_dir / "keep.txt").exists()
 
 
 def test_generate_astro_main_reports_redirect_emission_failures(

@@ -39,11 +39,6 @@ EXECUTION_METADATA_FILE = "execution-metadata.json"
 SENSITIVE_ARGUMENTS = {"password", "site_password"}
 FIDELITY_MODES = ("high", "balanced", "minimal")
 LAYOUT_STRATEGIES = ("hybrid", "components")
-DEFAULT_LAYOUT_STRATEGY_BY_MODE = {
-    "high": "hybrid",
-    "balanced": "hybrid",
-    "minimal": "hybrid",
-}
 
 
 def generate_astro_project(
@@ -403,7 +398,7 @@ def resolve_auth_credentials(args: argparse.Namespace) -> tuple[str | None, str 
 
 
 def default_layout_strategy_for_mode(fidelity_mode: str) -> str:
-    return DEFAULT_LAYOUT_STRATEGY_BY_MODE.get(fidelity_mode, "hybrid")
+    return "hybrid"
 
 
 def prompt_layout_strategy(console: Console, default: str) -> str:
