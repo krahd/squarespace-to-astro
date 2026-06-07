@@ -1,6 +1,6 @@
 # squarespace-to-astro – Project Status
 
-Last updated: 2026-06-06 19:10
+Last updated: 2026-06-06 22:38
 
 ## Project purpose
 
@@ -122,6 +122,7 @@ python scripts/build_binary_release.py
 - The repository README and user guide now distinguish the tagged `v0.5.7` release from `main` / next-release options, and the guide labels `--clean` and `--upgrade-legacy-assets` accordingly.
 - Release and installation docs now state that standalone bundles cover macOS arm64 and Linux x86_64 only; Windows users are directed to source installs until a Windows binary workflow is added.
 - The static project website in `docs/` was refreshed with current `v0.5.7` messaging, updated migration guidance, and an improved responsive visual design.
+- The top-level `ignored/` scratch directory is now excluded from source control via `.gitignore`.
 - `v0.5.7` added CI Node-backed Astro build smoke testing, redirect summary/report output, identity redirect filtering, RSS feed crawl seeding fallback, sparse-sitemap guidance improvements, and auth storage-state staleness checks.
 - `v0.5.6` included post-release housekeeping and older release/tag removal.
 - `v0.5.2` added streaming asset downloads, redirect generation, auth artefact permission hardening, CI workflow, and redirect tests.
@@ -179,4 +180,4 @@ Current risks:
 - Migration output prioritises editability while offering fidelity controls for layout-heavy pages.
 ---
 
-Last updated: 2026-06-06 19:10
+Last updated: 2026-06-06 22:38
