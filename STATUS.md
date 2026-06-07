@@ -1,6 +1,6 @@
 # squarespace-to-astro – Project Status
 
-Last updated: 2026-06-06 22:38
+Last updated: 2026-06-06 22:47
 
 ## Project purpose
 
@@ -19,13 +19,13 @@ The CLI exposes six user-facing commands:
 - `s2a generate-astro`
 - `s2a migrate`
 
-Generation and migration support `--fidelity-mode`, `--layout-strategy`, `--choose-layout-strategy`, and `--markdown`. Component reconstruction covers portfolio grids, gallery blocks, Fluid Engine sections, and classic-editor layouts. Probe, crawl, and migrate validate supplied or captured storage-state files before applying cookies. Crawl output directories are normalised as `Path` values, Atom feeds prefer alternate links, and Squarespace asset hosts are matched by exact host or subdomain.
+Generation and migration support `--fidelity-mode`, `--layout-strategy`, `--choose-layout-strategy`, and `--markdown`. Component reconstruction covers portfolio grids, gallery blocks, Fluid Engine sections, and classic-editor layouts. Probe, crawl, and migrate validate supplied or captured storage-state files before applying cookies. Crawl output directories are normalised as `Path` values, Atom feeds prefer alternate links, and Squarespace asset hosts are matched by exact host or subdomain. Probe and crawl now parse untrusted remote XML with `defusedxml`, so sitemap and RSS/Atom parsing rejects entity-expansion payloads instead of handing them to the standard library. Generated-site smoke workflows now clean up their temporary HTTP server reliably and fail when `generated/` contains no direct Astro project `package.json` files.
 
 Localized assets use readable route-based public filenames, with `asset_manifest.json` recording alias URLs and content-hash deduplication metadata. Legacy hash-suffixed manifests are upgraded only when `generate-astro --upgrade-legacy-assets` is passed; default `generate-astro` and `migrate` runs leave input manifests untouched and warn when legacy filenames are detected. Redirect generation is available via `--emit-redirects`, maps source URL paths to generated routes without query strings, and failures now surface warnings instead of disappearing. `--clean` removes only the Astro output directory, with safety checks that reject `/`, the current working directory, and the home directory.
 
 ## Active focus
 
-Current focus is maintaining healthy release state, expanding real-world fixture coverage, improving generated-site fidelity, preserving CLI compatibility, and keeping binary/Homebrew distribution tooling aligned.
+Current focus is maintaining healthy release state, hardening XML and CI baseline behaviour, expanding real-world fixture coverage, improving generated-site fidelity, preserving CLI compatibility, and keeping binary/Homebrew distribution tooling aligned.
 
 ## Architecture overview
 
@@ -113,11 +113,13 @@ python scripts/build_binary_release.py
 ## Recent changes
 
 - The Astro generator now renders `astro.config.mjs` string values with JSON escaping and sanitizes generated HTML, including event-handler attributes, `javascript:` URLs, iframe `srcdoc`, iframe `sandbox`, and unsafe `srcset` candidates.
+- Probe and crawl now use `defusedxml` for remote XML parsing, and regression tests cover malicious sitemap and RSS/Atom payloads without allowing entity expansion.
 - `generate-astro` now keeps legacy asset-manifest upgrades opt-in via `--upgrade-legacy-assets`, adds safe `--clean` deletion for Astro output directories, and surfaces redirect/report failures as warnings instead of swallowing them.
 - `probe`, `crawl`, and `migrate` now validate any supplied or captured storage-state file before applying cookies.
 - The crawler now normalises output directories as `Path` objects, prefers Atom alternate links, and matches Squarespace asset hosts by exact host or subdomain.
-- WordPress XML import now uses `defusedxml` for XML parsing, and the duplicate temporary-file cleanup loop in asset download handling was removed.
+- WordPress XML import now prefers `defusedxml` for XML parsing, and the duplicate temporary-file cleanup loop in asset download handling was removed.
 - CI now tests Python 3.11, 3.12, and 3.13, pins Node 20 in both GitHub Actions workflows, restores the Playwright browser cache before installation, and treats generated Astro install/build failures as fatal with explicit `dist/` and `index.html` checks.
+- The generated Astro smoke workflow now fails early when `generated/` exists without any direct `package.json` Astro projects and always tears down its temporary HTTP server.
 - The generated-site build helper clears stale `node_modules` before `npm ci`, which keeps repeated local and CI reruns idempotent.
 - The repository README and user guide now distinguish the tagged `v0.5.7` release from `main` / next-release options, and the guide labels `--clean` and `--upgrade-legacy-assets` accordingly.
 - Release and installation docs now state that standalone bundles cover macOS arm64 and Linux x86_64 only; Windows users are directed to source installs until a Windows binary workflow is added.
@@ -132,8 +134,8 @@ python scripts/build_binary_release.py
 
 Latest local verification:
 
-- `.venv/bin/python -m pytest -q tests/test_astro_generator.py tests/test_cli.py tests/test_generated_sites_build.py` -> 51 passed.
-- `.venv/bin/python -m pytest -q` -> 88 passed.
+- `.venv/bin/python -m pytest -q tests/test_crawl.py tests/test_cli.py tests/test_astro_generator.py` -> 53 passed.
+- `.venv/bin/python -m pytest -q` -> 91 passed.
 - CI now runs Python 3.11-3.13, Node 20, and the generated Astro smoke workflow separately.
 - Binary bundles are built with PyInstaller for macOS arm64 and Linux x86_64.
 - Homebrew formula is rendered by `scripts/render_homebrew_formula.py` and published to `krahd/homebrew-tap`.
@@ -180,4 +182,4 @@ Current risks:
 - Migration output prioritises editability while offering fidelity controls for layout-heavy pages.
 ---
 
-Last updated: 2026-06-06 22:38
+Last updated: 2026-06-06 22:47

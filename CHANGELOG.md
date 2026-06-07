@@ -12,6 +12,9 @@ The format is based on Keep a Changelog, and this project uses semantic versioni
 - `--emit-redirects` failures in `generate-astro` and `migrate` now surface warnings instead of being swallowed, and the best-effort migration report write now warns when serialization fails.
 - CLI storage-state handling now validates supplied or captured `storage_state.json` files before crawl/probe work starts, the crawler now prefers Atom alternate links correctly, asset host matching uses exact-or-subdomain checks, and WordPress XML parsing uses `defusedxml` when available.
 - Generated-site smoke testing now restores Playwright browsers before installation and fails builds when `dist/` is missing, empty, or lacks an `index.html` file.
+- Probe and crawl now parse remote sitemap/RSS XML with `defusedxml`, with regression coverage for malicious entity-expansion payloads.
+- The generated Astro smoke workflow now guarantees temporary HTTP server cleanup and fails when `generated/` contains no direct `package.json` Astro projects.
+- `default_layout_strategy_for_mode` keeps its unused mode argument as `_fidelity_mode` so linting stays quiet without changing behaviour.
 - `content.config.ts` generation now uses consistent four-space `presentation` indentation, and new symlink-clean regression tests lock `--clean` behaviour around symlinked output directories.
 - README and user guide docs now distinguish the tagged `v0.5.7` release from `main` / next-release options such as `--clean` and `--upgrade-legacy-assets`.
 

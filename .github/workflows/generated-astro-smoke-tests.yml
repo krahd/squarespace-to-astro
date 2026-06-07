@@ -63,6 +63,11 @@ jobs:
         shell: bash
         run: |
           if [ -d generated ] && [ -n "$(ls -A generated)" ]; then
+            package_projects=$(find generated -mindepth 2 -maxdepth 2 -type f -name package.json | wc -l | tr -d ' ')
+            if [ "$package_projects" -eq 0 ]; then
+              echo "generated/ exists but no generated/*/package.json Astro projects were found." >&2
+              exit 1
+            fi
             echo "has_generated=true" >> $GITHUB_OUTPUT
           else
             echo "has_generated=false" >> $GITHUB_OUTPUT
@@ -118,6 +123,14 @@ jobs:
         shell: bash
         run: |
           set -e
+          cleanup_server() {
+            if [ -n "${PID:-}" ]; then
+              kill "$PID" >/dev/null 2>&1 || true
+              wait "$PID" >/dev/null 2>&1 || true
+              PID=""
+            fi
+          }
+          trap cleanup_server EXIT
           # For each generated project that produced a `dist/` directory,
           # serve the static output briefly and use Playwright (Python) to
           # verify the root page loads successfully.
@@ -158,7 +171,6 @@ except Exception as e:
     print("Playwright error:", e)
     sys.exit(1)
 PY
-              kill $PID || true
-              sleep 1
+              cleanup_server
             fi
           done

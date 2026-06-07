@@ -397,7 +397,7 @@ def resolve_auth_credentials(args: argparse.Namespace) -> tuple[str | None, str 
     return username, password
 
 
-def default_layout_strategy_for_mode(fidelity_mode: str) -> str:
+def default_layout_strategy_for_mode(_fidelity_mode: str) -> str:
     return "hybrid"
 
 

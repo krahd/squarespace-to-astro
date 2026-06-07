@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from collections import deque
-import xml.etree.ElementTree as ET
 
 import httpx
 from bs4 import BeautifulSoup
+from defusedxml import ElementTree as ET
+from defusedxml.common import DefusedXmlException
 
 from s2a.extract.json_data import probe_json_data
 from s2a.net import fetch_text, is_html_content_type
@@ -252,7 +253,7 @@ def fetch_sitemap_urls(
 
         try:
             root = ET.fromstring(fetch.text)
-        except ET.ParseError as exc:
+        except (ET.ParseError, DefusedXmlException) as exc:
             warnings.append(f"Could not parse sitemap XML from {current_url}: {exc}")
             continue
 

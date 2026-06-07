@@ -5,10 +5,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable
 from urllib.parse import urlsplit
-import xml.etree.ElementTree as ET
 
 import httpx
 from bs4 import BeautifulSoup
+from defusedxml import ElementTree as ET
+from defusedxml.common import DefusedXmlException
 
 from s2a.extract.assets import extract_asset_references
 from s2a.extract.json_data import probe_json_data
@@ -217,7 +218,7 @@ def extract_urls_from_rss_feeds(
             continue
         try:
             root = ET.fromstring(fetch.text)
-        except ET.ParseError:
+        except (ET.ParseError, DefusedXmlException):
             continue
         # Handle both RSS 2.0 (<rss>/<channel>/<item>/<link>) and Atom
         # (<feed>/<entry>/<link href=...>).
