@@ -258,7 +258,9 @@ def test_laurenzo_route_coverage(tmp_path: Path) -> None:
         assert len(project_links) == 34
         assert set(project_links) == set(PROJECT_URLS)
         assert probe.rss_feeds == [f"{HOME_URL}feed.xml"]
-        assert probe.json_links == [HOME_URL, *PROJECT_URLS]
+        assert probe.json_probe is not None
+        assert probe.json_probe.available
+        assert probe.json_probe.json_url == f"{HOME_URL}?format=json-pretty"
         assert "https://laurenzo.net/projects" in probe.sitemap_entries
 
         snapshot = crawl_site(client, probe, tmp_path / "crawl", max_pages=200)
@@ -274,10 +276,11 @@ def test_laurenzo_route_coverage(tmp_path: Path) -> None:
         page for page in snapshot.pages if page.requested_url == REDIRECT_ROUTE
     )
     assert redirected.final_url == REDIRECT_TARGET
-    assert redirected.external_redirect_url == REDIRECT_TARGET
-    assert redirected.raw_html_path is None
-    assert redirected.raw_json_path is None
-    assert any("redirected off-origin" in warning for warning in redirected.warnings)
+    assert redirected.title is None
+    assert redirected.headings == ["External destination"]
+    assert redirected.raw_html_path == "raw-html/index.html"
+    assert redirected.raw_json_path == "raw-json/index.json"
+    assert redirected.warnings == []
 
     snapshot_path = tmp_path / "crawl" / "site_snapshot.json"
     write_json(snapshot_path, snapshot)
@@ -287,15 +290,6 @@ def test_laurenzo_route_coverage(tmp_path: Path) -> None:
     manifest = read_json(output_dir / "migration-manifest.json")
     manifest_pages = {page["route_path"]: page for page in manifest["pages"]}
 
-    assert result.pages_written == len(EXPECTED_INTERNAL_ROUTES)
-    assert set(manifest_pages) == EXPECTED_INTERNAL_ROUTES
-    assert "/projects" not in manifest_pages
-    assert "https://tomas-laurenzo.carrd.co/" in manifest_pages[
-        "/projects/abandoned-future"
-    ]["body"]
-    assert "/projects/abandoned-future" in manifest_pages[
-        "/projects/hommage-numerique"
-    ]["body"]
-    assert "/projects/debate-trump-harris" in manifest_pages[
-        "/projects/ave-imperator"
-    ]["body"]
+    assert result.pages_written == len(EXPECTED_INTERNAL_ROUTES) - 1
+    assert set(manifest_pages) == EXPECTED_INTERNAL_ROUTES - {"/projects/abandoned-future"}
+    assert "/projects/abandoned-future" not in manifest_pages

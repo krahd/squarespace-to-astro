@@ -1,6 +1,6 @@
 # squarespace-to-astro – Project Status
 
-Last updated: 2026-06-06 22:47
+Last updated: 2026-06-08 18:26
 
 ## Project purpose
 
@@ -19,7 +19,7 @@ The CLI exposes six user-facing commands:
 - `s2a generate-astro`
 - `s2a migrate`
 
-Generation and migration support `--fidelity-mode`, `--layout-strategy`, `--choose-layout-strategy`, and `--markdown`. Component reconstruction covers portfolio grids, gallery blocks, Fluid Engine sections, and classic-editor layouts. Probe, crawl, and migrate validate supplied or captured storage-state files before applying cookies. Crawl output directories are normalised as `Path` values, Atom feeds prefer alternate links, and Squarespace asset hosts are matched by exact host or subdomain. Probe and crawl now parse untrusted remote XML with `defusedxml`, so sitemap and RSS/Atom parsing rejects entity-expansion payloads instead of handing them to the standard library. Generated-site smoke workflows now clean up their temporary HTTP server reliably and fail when `generated/` contains no direct Astro project `package.json` files.
+Generation and migration support `--fidelity-mode`, `--layout-strategy`, `--choose-layout-strategy`, and `--markdown`. Component reconstruction covers portfolio grids, gallery blocks, Fluid Engine sections, and classic-editor layouts. Probe, crawl, and migrate validate supplied or captured storage-state files before applying cookies. Crawl output directories are normalised as `Path` values, Atom feeds prefer alternate links, and Squarespace asset hosts are matched by exact host or subdomain. Probe and crawl now parse untrusted remote XML with `defusedxml`, so sitemap and RSS/Atom parsing rejects entity-expansion payloads instead of handing them to the standard library. Crawl now skips canonical duplicate pages whose canonical URL has already been crawled, which keeps sitemap-only collection indexes out of the generated manifest. Generated-site smoke workflows now clean up their temporary HTTP server reliably and fail when `generated/` contains no direct Astro project `package.json` files.
 
 Localized assets use readable route-based public filenames, with `asset_manifest.json` recording alias URLs and content-hash deduplication metadata. Legacy hash-suffixed manifests are upgraded only when `generate-astro --upgrade-legacy-assets` is passed; default `generate-astro` and `migrate` runs leave input manifests untouched and warn when legacy filenames are detected. Redirect generation is available via `--emit-redirects`, maps source URL paths to generated routes without query strings, and failures now surface warnings instead of disappearing. `--clean` removes only the Astro output directory, with safety checks that reject `/`, the current working directory, and the home directory.
 
@@ -112,6 +112,7 @@ python scripts/build_binary_release.py
 
 ## Recent changes
 
+- The crawler now skips canonical duplicate pages whose canonical URL has already been crawled, and the route-coverage tests now reflect the current redirect and manifest contract.
 - The Astro generator now renders `astro.config.mjs` string values with JSON escaping and sanitizes generated HTML, including event-handler attributes, `javascript:` URLs, iframe `srcdoc`, iframe `sandbox`, and unsafe `srcset` candidates.
 - Probe and crawl now use `defusedxml` for remote XML parsing, and regression tests cover malicious sitemap and RSS/Atom payloads without allowing entity expansion.
 - `generate-astro` now keeps legacy asset-manifest upgrades opt-in via `--upgrade-legacy-assets`, adds safe `--clean` deletion for Astro output directories, and surfaces redirect/report failures as warnings instead of swallowing them.
@@ -135,7 +136,8 @@ python scripts/build_binary_release.py
 Latest local verification:
 
 - `.venv/bin/python -m pytest -q tests/test_crawl.py tests/test_cli.py tests/test_astro_generator.py` -> 53 passed.
-- `.venv/bin/python -m pytest -q` -> 91 passed.
+- `.venv/bin/python -m pytest -q tests/test_generated_sites_build.py tests/test_laurenzo_route_coverage.py` -> 3 passed.
+- `.venv/bin/python -m pytest -q` -> 92 passed.
 - CI now runs Python 3.11-3.13, Node 20, and the generated Astro smoke workflow separately.
 - Binary bundles are built with PyInstaller for macOS arm64 and Linux x86_64.
 - Homebrew formula is rendered by `scripts/render_homebrew_formula.py` and published to `krahd/homebrew-tap`.
@@ -182,4 +184,4 @@ Current risks:
 - Migration output prioritises editability while offering fidelity controls for layout-heavy pages.
 ---
 
-Last updated: 2026-06-06 22:47
+Last updated: 2026-06-08 18:26

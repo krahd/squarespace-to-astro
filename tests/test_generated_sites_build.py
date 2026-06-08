@@ -1,5 +1,7 @@
+import os
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -33,10 +35,32 @@ def _assert_non_empty_dist(project_dir: Path) -> None:
 def _build_generated_project(project_dir: Path) -> None:
     node_modules = project_dir / "node_modules"
     if node_modules.exists():
-        shutil.rmtree(node_modules)
+        _remove_tree(node_modules)
     subprocess.check_call(_npm_install_command(project_dir), cwd=str(project_dir))
     subprocess.check_call(["npm", "run", "build"], cwd=str(project_dir))
     _assert_non_empty_dist(project_dir)
+
+
+def _remove_tree(path: Path) -> None:
+    if os.name == "nt":
+        shutil.rmtree(path)
+        return
+
+    for _ in range(5):
+        if not path.exists():
+            return
+        ds_store = path / ".DS_Store"
+        if ds_store.exists():
+            ds_store.unlink(missing_ok=True)
+        try:
+            shutil.rmtree(path)
+            return
+        except OSError:
+            time.sleep(0.1)
+
+    shutil.rmtree(path, ignore_errors=True)
+    if path.exists():
+        raise OSError(f"Could not remove {path}")
 
 
 @pytest.mark.skipif(not _has_node(), reason="Node.js/npm not available")

@@ -105,10 +105,9 @@ def crawl_site(
         password_gate_detected = False
         json_probe = None
 
-        if fetch.text:
-            html_path = store_raw_html(output_root, final_url, fetch.text)
-
         if not is_html_content_type(fetch.content_type):
+            if fetch.text:
+                html_path = store_raw_html(output_root, final_url, fetch.text)
             page_warnings.append(
                 "Skipped structured parsing because the response was not HTML."
             )
@@ -126,6 +125,21 @@ def crawl_site(
             internal_links, external_links = extract_links(
                 soup, final_url, probe.site_origin
             )
+            if canonical_url and canonical_url != final_url and canonical_url in visited:
+                crawl_warnings.append(
+                    f"Skipped canonical duplicate page: {final_url} -> {canonical_url}"
+                )
+                if progress_callback is not None:
+                    progress_callback(
+                        len(pages),
+                        crawl_progress_total(
+                            queue, completed_pages=len(pages), max_pages=max_pages
+                        ),
+                        None,
+                    )
+                continue
+
+            html_path = store_raw_html(output_root, final_url, fetch.text)
             owner_route = urlsplit(final_url).path or "/"
             assets = extract_asset_references(soup, final_url, owner_route)
             asset_urls = list(dict.fromkeys(asset.source_url for asset in assets))
