@@ -257,6 +257,7 @@ def test_laurenzo_route_coverage(tmp_path: Path) -> None:
         project_links = [url for url in probe.homepage_links if "/projects/" in url]
         assert len(project_links) == 34
         assert set(project_links) == set(PROJECT_URLS)
+        assert set(probe.json_links) == {HOME_URL, *PROJECT_URLS}
         assert probe.rss_feeds == [f"{HOME_URL}feed.xml"]
         assert probe.json_probe is not None
         assert probe.json_probe.available
@@ -277,10 +278,10 @@ def test_laurenzo_route_coverage(tmp_path: Path) -> None:
     )
     assert redirected.final_url == REDIRECT_TARGET
     assert redirected.title is None
-    assert redirected.headings == ["External destination"]
-    assert redirected.raw_html_path == "raw-html/index.html"
-    assert redirected.raw_json_path == "raw-json/index.json"
-    assert redirected.warnings == []
+    assert redirected.external_redirect_url == REDIRECT_TARGET
+    assert redirected.raw_html_path is None
+    assert redirected.raw_json_path is None
+    assert redirected.warnings == [f"Final URL redirected off-origin to {REDIRECT_TARGET}."]
 
     snapshot_path = tmp_path / "crawl" / "site_snapshot.json"
     write_json(snapshot_path, snapshot)
@@ -290,6 +291,13 @@ def test_laurenzo_route_coverage(tmp_path: Path) -> None:
     manifest = read_json(output_dir / "migration-manifest.json")
     manifest_pages = {page["route_path"]: page for page in manifest["pages"]}
 
-    assert result.pages_written == len(EXPECTED_INTERNAL_ROUTES) - 1
-    assert set(manifest_pages) == EXPECTED_INTERNAL_ROUTES - {"/projects/abandoned-future"}
-    assert "/projects/abandoned-future" not in manifest_pages
+    assert result.pages_written == len(EXPECTED_INTERNAL_ROUTES)
+    assert set(manifest_pages) == EXPECTED_INTERNAL_ROUTES
+
+    abandoned_page = manifest_pages["/projects/abandoned-future"]
+    assert REDIRECT_TARGET in abandoned_page["body"]
+    assert "redirects off-site" in abandoned_page["body"]
+
+    memoirs_page = manifest_pages["/projects/memoirs-of-the-blind"]
+    assert "/projects/be-water" in memoirs_page["body"]
+    assert "/projects/extraordinary-accident" in memoirs_page["body"]

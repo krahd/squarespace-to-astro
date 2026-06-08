@@ -8,6 +8,8 @@ The format is based on Keep a Changelog, and this project uses semantic versioni
 
 ### Unreleased
 
+- Crawl and probe now collect same-origin URLs from homepage HTML, sitemap entries, RSS/Atom feeds, and Squarespace JSON payloads in deterministic order, and off-origin redirects are now represented locally instead of pulling external HTML into the internal snapshot.
+- `migrate` now defaults `--max-pages` to 200 and the CLI help text reflects the higher production migration ceiling.
 - Crawl now skips canonical duplicate pages whose canonical URL has already been crawled, which keeps sitemap-only collection indexes out of generated manifests.
 - `generate-astro` now accepts `--upgrade-legacy-assets` and `--clean`; legacy snapshot-root asset-manifest upgrades are opt-in instead of happening by default, and safe-path checks prevent `--clean` from deleting `/`, the current working directory, or the home directory.
 - `--emit-redirects` failures in `generate-astro` and `migrate` now surface warnings instead of being swallowed, and the best-effort migration report write now warns when serialization fails.

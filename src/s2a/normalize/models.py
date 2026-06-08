@@ -82,6 +82,7 @@ class SiteProbe:
     sitemap_entries: list[str] = field(default_factory=list)
     homepage_links: list[str] = field(default_factory=list)
     rss_feeds: list[str] = field(default_factory=list)
+    json_links: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
 
@@ -102,6 +103,7 @@ class PageSnapshot:
     squarespace_indicators: list[str] = field(default_factory=list)
     password_gate_detected: bool = False
     json_probe: JsonDataProbe | None = None
+    external_redirect_url: str | None = None
     raw_html_path: str | None = None
     raw_json_path: str | None = None
     warnings: list[str] = field(default_factory=list)

@@ -12,7 +12,7 @@ from defusedxml import ElementTree as ET
 from defusedxml.common import DefusedXmlException
 
 from s2a.extract.assets import extract_asset_references
-from s2a.extract.json_data import probe_json_data
+from s2a.extract.json_data import extract_json_links, probe_json_data
 from s2a.files import write_json, write_text
 from s2a.net import fetch_text, is_html_content_type
 from s2a.normalize.models import CrawlSnapshot, PageSnapshot, SiteProbe
@@ -21,6 +21,7 @@ from s2a.url_utils import (
     file_stem_for_url,
     is_crawlable_link,
     make_absolute_url,
+    same_origin,
 )
 
 ProgressCallback = Callable[[int, int, str | None], None]
@@ -35,23 +36,36 @@ def crawl_site(
 ) -> CrawlSnapshot:
     output_root = Path(output_dir)
     crawl_warnings: list[str] = []
-    queue = deque(seed_urls_from_probe(probe))
-
-    # When the sitemap is sparse, supplement seeds with URLs extracted from any
-    # RSS feeds discovered on the homepage.  This improves crawl coverage for
-    # blogs and portfolios that don't publish a complete sitemap.
-    if not probe.sitemap_entries and probe.rss_feeds:
-        rss_urls = extract_urls_from_rss_feeds(client, probe.rss_feeds, probe.site_origin)
-        for url in rss_urls:
-            if url not in queue:
-                queue.append(url)
-        if rss_urls:
-            crawl_warnings.append(
-                f"Sitemap was empty; added {len(rss_urls)} URL(s) from "
-                f"{len(probe.rss_feeds)} RSS feed(s) as supplementary seeds."
-            )
+    queue: deque[str] = deque()
+    queued: set[str] = set()
     visited: set[str] = set()
     pages: list[PageSnapshot] = []
+
+    def enqueue(url: str) -> None:
+        canonical_url = canonicalize_page_url(url)
+        if canonical_url in visited or canonical_url in queued:
+            return
+        if len(visited) + len(queue) >= max_pages * 4:
+            return
+        queue.append(canonical_url)
+        queued.add(canonical_url)
+
+    for seed_url in seed_urls_from_probe(probe):
+        enqueue(seed_url)
+
+    # Supplement the deterministic seed set with feed-discovered URLs and any
+    # same-origin URLs published through Squarespace JSON payloads.
+    if probe.rss_feeds:
+        rss_urls = extract_urls_from_rss_feeds(client, probe.rss_feeds, probe.site_origin)
+        for url in rss_urls:
+            enqueue(url)
+        if rss_urls:
+            crawl_warnings.append(
+                f"Added {len(rss_urls)} URL(s) from {len(probe.rss_feeds)} RSS/Atom feed(s) as supplementary seeds."
+            )
+
+    for url in probe.json_links:
+        enqueue(url)
 
     if progress_callback is not None:
         progress_callback(
@@ -60,6 +74,7 @@ def crawl_site(
 
     while queue and len(pages) < max_pages:
         requested_url = canonicalize_page_url(queue.popleft())
+        queued.discard(requested_url)
         if requested_url in visited:
             continue
         visited.add(requested_url)
@@ -91,6 +106,32 @@ def crawl_site(
             continue
 
         final_url = canonicalize_page_url(fetch.final_url or requested_url)
+        if fetch.final_url and not same_origin(final_url, probe.site_origin):
+            warning = f"Final URL redirected off-origin to {final_url}."
+            crawl_warnings.append(warning)
+            pages.append(
+                PageSnapshot(
+                    requested_url=requested_url,
+                    final_url=final_url,
+                    status_code=fetch.status_code,
+                    content_type=fetch.content_type,
+                    title=None,
+                    meta_description=None,
+                    canonical_url=requested_url,
+                    external_redirect_url=final_url,
+                    warnings=[warning],
+                )
+            )
+            if progress_callback is not None:
+                progress_callback(
+                    len(pages),
+                    crawl_progress_total(
+                        queue, completed_pages=len(pages), max_pages=max_pages
+                    ),
+                    None,
+                )
+            continue
+
         html_path: str | None = None
         json_path: str | None = None
         title: str | None = None
@@ -153,6 +194,8 @@ def crawl_site(
             json_probe, json_payload = probe_json_data(client, final_url)
             if json_probe.available and json_payload is not None:
                 json_path = store_raw_json(output_root, final_url, json_payload)
+                for url in extract_json_links(json_payload, probe.site_origin):
+                    enqueue(url)
 
         pages.append(
             PageSnapshot(

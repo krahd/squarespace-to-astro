@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 from defusedxml import ElementTree as ET
 from defusedxml.common import DefusedXmlException
 
-from s2a.extract.json_data import probe_json_data
+from s2a.extract.json_data import extract_json_links, probe_json_data
 from s2a.net import fetch_text, is_html_content_type
 from s2a.normalize.models import SiteProbe
 from s2a.url_utils import (
@@ -34,6 +34,7 @@ def probe_site(
     password_gate_detected = False
     homepage_links: list[str] = []
     rss_feeds: list[str] = []
+    json_links: list[str] = []
 
     if home_fetch.error:
         warnings.append(f"Homepage fetch failed: {home_fetch.error}")
@@ -57,7 +58,9 @@ def probe_site(
             "Homepage did not appear to be HTML; extraction signals may be incomplete."
         )
 
-    json_probe, _ = probe_json_data(client, final_home_url)
+    json_probe, json_payload = probe_json_data(client, final_home_url)
+    if json_probe.available and json_payload is not None:
+        json_links = extract_json_links(json_payload, site_origin)
     (
         robots_url,
         robots_status_code,
@@ -106,6 +109,7 @@ def probe_site(
         sitemap_entries=sitemap_entries,
         homepage_links=homepage_links,
         rss_feeds=rss_feeds,
+        json_links=json_links,
         warnings=list(dict.fromkeys(warnings)),
     )
 
@@ -183,7 +187,7 @@ def extract_rss_feeds(soup: BeautifulSoup, base_url: str) -> list[str]:
     for link in soup.find_all("link", href=True):
         rel = {value.lower() for value in link.get("rel", [])}
         link_type = link.get("type", "").lower()
-        if "alternate" in rel and "rss" in link_type:
+        if "alternate" in rel and ("rss" in link_type or "atom" in link_type):
             feeds.append(make_absolute_url(base_url, link["href"]))
 
     return list(dict.fromkeys(feeds))

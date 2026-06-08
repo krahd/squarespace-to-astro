@@ -22,6 +22,7 @@ from s2a.normalize.models import (
     GeneratedContentEntry,
     GeneratedNavigationItem,
 )
+from s2a.url_utils import same_origin
 
 NOISE_PATTERN = re.compile(
     r"nav|menu|header|footer|breadcrumb|share|social|cookie|newsletter|pagination|search|sidebar",
@@ -476,6 +477,41 @@ def generated_entry_from_snapshot(
     layout_strategy: str,
     markdown_first: bool,
 ) -> GeneratedContentEntry:
+    if page_redirects_off_origin(page):
+        redirect_target = str(
+            page.get("external_redirect_url")
+            or page.get("final_url")
+            or page.get("requested_url")
+            or ""
+        )
+        title = clean_title(page.get("title") or label_from_path(route_path), site_title)
+        body_lines = [f"# {title}", ""]
+        if redirect_target:
+            body_lines.extend(
+                [
+                    f"This route redirects off-site to [{redirect_target}]({redirect_target}).",
+                    "",
+                    "The original Squarespace route is preserved here so internal links do not expose the external destination directly.",
+                ]
+            )
+        else:
+            body_lines.append("This route redirects off-site.")
+
+        return GeneratedContentEntry(
+            entry_id=entry_id_for_path(route_path, "page"),
+            title=title,
+            slug=slug_for_page(route_path),
+            route_path=route_path,
+            description=page.get("meta_description")
+            or (f"Redirects to {redirect_target}" if redirect_target else None),
+            source_url=page.get("requested_url") or page.get("final_url"),
+            canonical_url=page.get("requested_url") or page.get("final_url"),
+            body="\n".join(body_lines).strip(),
+            body_format="markdown",
+            presentation="standard",
+            home=route_path == "/",
+        )
+
     html_fragment = localize_content_html(
         html_from_snapshot(
             page,
@@ -2031,8 +2067,23 @@ def determine_blog_title(
 
 
 def route_path_for_page(page: dict) -> str:
-    candidate = page.get("final_url") or page.get("requested_url") or "/"
+    candidate = (
+        page.get("requested_url")
+        if page_redirects_off_origin(page)
+        else page.get("final_url") or page.get("requested_url") or "/"
+    )
     return normalize_path(urlsplit(candidate).path)
+
+
+def page_redirects_off_origin(page: dict) -> bool:
+    if page.get("external_redirect_url"):
+        return True
+
+    requested_url = page.get("requested_url")
+    final_url = page.get("final_url")
+    if requested_url and final_url:
+        return not same_origin(str(final_url), str(requested_url))
+    return False
 
 
 def normalize_path(path: str | None) -> str:
@@ -2191,6 +2242,8 @@ def remove_noise(
         element_id = attrs.get("id", "")
         marker = f"{classes} {element_id}".strip()
         if marker and NOISE_PATTERN.search(marker):
+            if "item-pagination" in classes or element_id == "itemPagination":
+                continue
             element.decompose()
 
 

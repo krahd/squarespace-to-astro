@@ -253,8 +253,8 @@ def build_parser() -> argparse.ArgumentParser:
     migrate_parser.add_argument(
         "--max-pages",
         type=int,
-        default=75,
-        help="Maximum number of HTML pages to crawl.",
+        default=200,
+        help="Maximum number of HTML pages to crawl during migrate. Defaults to 200.",
     )
     migrate_parser.add_argument(
         "--max-sitemap-urls",

@@ -7,7 +7,7 @@ import httpx
 
 from s2a.net import fetch_text, is_json_content_type
 from s2a.normalize.models import JsonDataProbe
-from s2a.url_utils import with_query_param
+from s2a.url_utils import canonicalize_page_url, is_crawlable_link, make_absolute_url, with_query_param
 
 
 def build_json_data_url(url: str) -> str:
@@ -93,3 +93,50 @@ def probe_json_data(
         ),
         parsed if isinstance(parsed, dict) else None,
     )
+
+
+def extract_json_links(payload: Any, site_origin: str) -> list[str]:
+    discovered: list[str] = []
+    seen: set[str] = set()
+    base_url = site_origin if site_origin.endswith("/") else f"{site_origin}/"
+
+    def add_candidate(raw_value: Any) -> None:
+        if not isinstance(raw_value, str):
+            if isinstance(raw_value, list):
+                for item in raw_value:
+                    add_candidate(item)
+            elif isinstance(raw_value, dict):
+                for nested_value in raw_value.values():
+                    add_candidate(nested_value)
+            return
+
+        candidate = raw_value.strip()
+        if not candidate or candidate.startswith("#"):
+            return
+        if not candidate.startswith(("http://", "https://", "/")) and "/" not in candidate:
+            return
+
+        absolute = make_absolute_url(base_url, candidate)
+        canonical = canonicalize_page_url(absolute)
+        if not is_crawlable_link(canonical, site_origin) or canonical in seen:
+            return
+
+        seen.add(canonical)
+        discovered.append(canonical)
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            for key, value in node.items():
+                lowered = str(key).lower()
+                if lowered in {"fullurl", "href", "url", "link", "canonicalurl"} or lowered.endswith(
+                    ("url", "href", "link")
+                ):
+                    add_candidate(value)
+                else:
+                    walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    walk(payload)
+    return discovered

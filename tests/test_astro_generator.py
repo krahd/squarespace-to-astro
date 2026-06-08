@@ -498,6 +498,80 @@ def test_generate_astro_project_keeps_portfolio_routes_as_pages(tmp_path: Path) 
     assert "const posts = defineCollection" not in content_config
 
 
+def test_generate_astro_project_turns_off_origin_redirects_into_placeholder_pages(
+    tmp_path: Path,
+) -> None:
+    snapshot_dir = tmp_path / "snapshot"
+    raw_html_dir = snapshot_dir / "raw-html"
+    raw_html_dir.mkdir(parents=True)
+
+    write_text(
+        raw_html_dir / "index.html",
+        "<html><body><main><h1>Home Title</h1><p>Welcome to the site.</p></main></body></html>",
+    )
+
+    redirect_url = "https://external.example.com/"
+    probe = SiteProbe(
+        target_url="https://example.com/",
+        final_home_url="https://example.com/",
+        site_origin="https://example.com",
+        homepage_status_code=200,
+        homepage_title="Example Site",
+        probably_squarespace=True,
+        homepage_links=[
+            "https://example.com/",
+            "https://example.com/projects/abandoned-future",
+        ],
+    )
+    snapshot = CrawlSnapshot(
+        generated_at="2026-04-05T00:00:00+00:00",
+        target_url="https://example.com/",
+        base_url="https://example.com/",
+        probe=probe,
+        pages=[
+            PageSnapshot(
+                requested_url="https://example.com/",
+                final_url="https://example.com/",
+                status_code=200,
+                content_type="text/html",
+                title="Home Title — Example Site",
+                meta_description="Home description",
+                canonical_url="https://example.com/",
+                raw_html_path="raw-html/index.html",
+            ),
+            PageSnapshot(
+                requested_url="https://example.com/projects/abandoned-future",
+                final_url=redirect_url,
+                status_code=200,
+                content_type="text/html",
+                title=None,
+                meta_description=None,
+                canonical_url="https://example.com/projects/abandoned-future",
+                external_redirect_url=redirect_url,
+                warnings=[f"Final URL redirected off-origin to {redirect_url}."],
+            ),
+        ],
+    )
+
+    snapshot_path = snapshot_dir / "site_snapshot.json"
+    write_json(snapshot_path, snapshot)
+
+    output_dir = tmp_path / "astro-site"
+    result = generate_astro_project(snapshot_path, output_dir, site_url="https://example.com")
+    manifest = read_json(output_dir / "migration-manifest.json")
+    redirect_page = next(page for page in manifest["pages"] if page["route_path"] == "/projects/abandoned-future")
+
+    assert result.pages_written == 2
+    assert redirect_page["source_url"] == "https://example.com/projects/abandoned-future"
+    assert redirect_page["canonical_url"] == "https://example.com/projects/abandoned-future"
+
+    content = (output_dir / "src/content/pages/projects--abandoned-future.md").read_text(
+        encoding="utf-8"
+    )
+    assert "redirects off-site" in content
+    assert redirect_url in content
+
+
 def test_extract_main_html_handles_nested_noise_elements() -> None:
     html = """
         <html>
