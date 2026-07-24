@@ -29,6 +29,26 @@ class AssetReference:
 
 
 @dataclass(slots=True)
+class MediaReference:
+    provider: str
+    video_id: str
+    source_url: str
+    embed_url: str
+    privacy_token: str = ""
+    source_kinds: list[str] = field(default_factory=list)
+    detection_methods: list[str] = field(default_factory=list)
+    confidence: str = "high"
+    occurrences: int = 1
+
+
+@dataclass(slots=True)
+class UnresolvedMediaReference:
+    provider: str
+    reason: str
+    source_kinds: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
 class DownloadedAsset:
     source_url: str
     final_url: str
@@ -100,6 +120,8 @@ class PageSnapshot:
     external_links: list[str] = field(default_factory=list)
     asset_urls: list[str] = field(default_factory=list)
     assets: list[AssetReference] = field(default_factory=list)
+    media: list[MediaReference] = field(default_factory=list)
+    unresolved_media: list[UnresolvedMediaReference] = field(default_factory=list)
     squarespace_indicators: list[str] = field(default_factory=list)
     password_gate_detected: bool = False
     json_probe: JsonDataProbe | None = None
@@ -126,6 +148,8 @@ class PageReportEntry:
     title: str | None
     json_available: bool
     password_gate_detected: bool
+    media_count: int = 0
+    unresolved_media_count: int = 0
 
 
 @dataclass(slots=True)
@@ -141,6 +165,9 @@ class CrawlReport:
     unique_assets: int
     unique_internal_links: int
     sitemap_entries: int
+    unique_media: int = 0
+    pages_with_media: int = 0
+    unresolved_media_mentions: int = 0
     rss_feeds: list[str] = field(default_factory=list)
     manual_follow_up: list[str] = field(default_factory=list)
     pages: list[PageReportEntry] = field(default_factory=list)
