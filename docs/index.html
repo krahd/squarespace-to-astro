@@ -3,199 +3,112 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>squarespace-to-astro (s2a)</title>
+    <title>squarespace-to-astro</title>
     <meta
       name="description"
-      content="Install and run s2a to migrate Squarespace content into an editable Astro project with fidelity controls, route-based assets, and redirect output."
-    />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;700;800&family=JetBrains+Mono:wght@400;600&display=swap"
-      rel="stylesheet"
+      content="A command-line tool for migrating Squarespace content and assets to an editable Astro project."
     />
     <link rel="stylesheet" href="./site.css" />
   </head>
   <body>
-    <div class="ambient" aria-hidden="true"></div>
-    <div class="page-shell">
-      <header class="hero">
-        <p class="eyebrow">Squarespace Migration CLI</p>
-        <h1>Move from Squarespace to Astro with s2a</h1>
-        <p class="lead">
-          s2a extracts content from Squarespace and generates an editable
-          <a href="https://github.com/withastro/astro">Astro</a> project. Use this page for the
-          fastest path from install to your first migration.
+    <div class="page">
+      <header>
+        <h1>squarespace-to-astro</h1>
+        <p class="summary">
+          A command-line tool for extracting content and assets from Squarespace sites and
+          creating editable <a href="https://astro.build/">Astro</a> projects.
         </p>
-        <div class="release-note">
-          <span class="badge">Current release</span>
-          <p>
-            <strong>v0.5.8</strong> includes redirect output (<code>--emit-redirects</code>),
-            route-based localised assets, high-fidelity layout strategies, and compatibility
-            upgrades for legacy hash-suffixed asset manifests.
-          </p>
-        </div>
-        <div class="actions">
-          <a href="https://github.com/krahd/squarespace-to-astro/blob/main/USER_GUIDE.md">Read user guide</a>
-          <a href="https://github.com/krahd/squarespace-to-astro/releases">Download releases</a>
-          <a href="https://github.com/krahd/squarespace-to-astro">Open repository</a>
-        </div>
+        <p class="release">Current release: <code>v0.5.8</code></p>
+        <nav aria-label="Primary">
+          <a href="#install">Install</a>
+          <a href="#use">Basic use</a>
+          <a href="#limitations">Limitations</a>
+          <a href="https://github.com/krahd/squarespace-to-astro">GitHub</a>
+        </nav>
       </header>
 
       <main>
-        <section class="surface">
-          <h2>Quick start</h2>
-          <div class="grid two-up">
-            <article>
-              <h3>Install</h3>
-              <pre><code>brew tap krahd/tap
+        <section id="install">
+          <h2>Install</h2>
+          <p>Homebrew is the recommended method on macOS arm64 and Linux x86_64.</p>
+          <pre><code>brew tap krahd/tap
 brew install s2a</code></pre>
-            </article>
-            <article>
-              <h3>First migration</h3>
-              <pre><code>s2a migrate https://example.squarespace.com \\
-  --astro-dir ./generated/example-site</code></pre>
-            </article>
-          </div>
-        </section>
-
-        <section class="surface">
-          <h2>Before you run</h2>
-          <div class="grid two-up">
-            <article>
-              <h3>What s2a generates</h3>
-              <p>
-                A structured site snapshot and a buildable Astro project with route pages, layouts,
-                site data, and localised assets under readable route-based filenames.
-              </p>
-            </article>
-            <article>
-              <h3>What you need</h3>
-              <p>
-                Site URL, disk space for the output folder, and Node.js only when you want to run
-                the generated Astro site locally.
-              </p>
-            </article>
-            <article>
-              <h3>When to use authentication</h3>
-              <p>
-                Public pages can usually be crawled directly. For account-authenticated content,
-                use credentials or browser storage-state with the auth options.
-              </p>
-            </article>
-            <article>
-              <h3>Current boundaries</h3>
-              <p>
-                Commerce, events, forms, members, and full Squarespace admin workflows are out of
-                scope. Utility routes such as <code>/cart</code>, <code>/checkout</code>, and
-                <code>/account</code> are intentionally excluded from static output.
-              </p>
-            </article>
-          </div>
-        </section>
-
-        <section class="surface">
-          <h2>Migration patterns</h2>
-          <h3>Merge XML export when available</h3>
-          <pre><code>s2a migrate https://example.squarespace.com \\
-  --xml-export ./exports/squarespace-wordpress.xml \\
-  --astro-dir ./generated/example-site</code></pre>
-          <h3>Use fidelity controls for layout-heavy pages</h3>
-          <pre><code>s2a migrate https://example.squarespace.com \\
-  --fidelity-mode high \\
-  --layout-strategy components \\
-  --markdown \\
-  --astro-dir ./generated/example-site</code></pre>
+          <p>Verify the installation:</p>
+          <pre><code>s2a --help</code></pre>
           <p>
-            If you omit <code>--output-dir</code>, s2a writes a timestamped run folder in
-            <code>site-output/</code> and records key paths in
-            <code>execution-metadata.json</code>.
+            Homebrew installs the standalone binary and browser dependencies. It does not
+            require a separate Python installation.
+          </p>
+          <p>
+            Standalone archives and source installation instructions are available in the
+            <a href="https://github.com/krahd/squarespace-to-astro/blob/main/USER_GUIDE.md#install">user guide</a>.
           </p>
         </section>
 
-        <section class="surface">
-          <h2>Authentication for private content</h2>
-          <p>
-            Public sites normally do not need authentication. For account-authenticated routes,
-            export credentials before running <code>probe</code>, <code>crawl</code>,
-            <code>auth-browser</code>, or <code>migrate</code>:
-          </p>
-          <pre><code>export SQUARESPACE_USER=owner@example.com
-export SQUARESPACE_PWD=owner-password
-
-s2a migrate https://example.squarespace.com \
+        <section id="use">
+          <h2>Basic use</h2>
+          <p>Migrate a public Squarespace site:</p>
+          <pre><code>s2a migrate https://example.squarespace.com \
   --astro-dir ./generated/example-site</code></pre>
-          <ul>
-            <li><code>--username</code> and <code>--password</code> override environment variables for one run.</li>
-            <li><code>--site-password</code> is for a site-wide gate, separate from account login.</li>
-            <li>The browser-auth flow does not support interactive 2FA prompts.</li>
-          </ul>
-        </section>
 
-        <section class="surface">
-          <h2>What s2a writes</h2>
-          <div class="grid two-up">
-            <article>
-              <h3>Run folder</h3>
-              <ul>
-                <li><code>execution-metadata.json</code></li>
-                <li><code>probe.json</code></li>
-                <li><code>site_snapshot.json</code></li>
-                <li><code>report.json</code></li>
-                <li><code>asset_manifest.json</code> and <code>downloaded-assets/</code></li>
-                <li><code>raw-html/</code> and <code>raw-json/</code></li>
-              </ul>
-            </article>
-            <article>
-              <h3>Generated Astro site</h3>
-              <ul>
-                <li><code>migration-manifest.json</code></li>
-                <li><code>src/content/pages/</code></li>
-                <li><code>src/content/posts/</code> when posts were detected</li>
-                <li><code>src/data/site.json</code></li>
-                <li><code>public/assets/</code> for localized media and files</li>
-                <li><code>src/layouts/</code>, <code>src/pages/</code>, and optional redirect outputs</li>
-              </ul>
-            </article>
-          </div>
-        </section>
+          <p>Include a Squarespace WordPress XML export when one is available:</p>
+          <pre><code>s2a migrate https://example.squarespace.com \
+  --xml-export ./exports/squarespace-wordpress.xml \
+  --astro-dir ./generated/example-site</code></pre>
 
-        <section class="surface">
-          <h2>Continue in Astro</h2>
-          <p>
-            The generated output is a normal <a href="https://github.com/withastro/astro">Astro</a>
-            project. After migration, move into the generated directory and start the local preview:
-          </p>
+          <p>Run the generated Astro project:</p>
           <pre><code>cd ./generated/example-site
 npm install
 npm run dev</code></pre>
+        </section>
+
+        <section>
+          <h2>What it does</h2>
+          <ul>
+            <li>Crawls public Squarespace pages and records site structure.</li>
+            <li>Reads sitemaps, feeds, Squarespace JSON data, and optional XML exports.</li>
+            <li>Downloads Squarespace-hosted assets after confirmation.</li>
+            <li>Creates an Astro project with pages, content, site data, layouts, and local assets.</li>
+            <li>Can generate redirect mappings with <code>--emit-redirects</code>.</li>
+            <li>Can reuse browser session state for account-authenticated content.</li>
+          </ul>
           <p>
-            Most hand edits happen in <code>src/content/</code> for content, <code>src/data/site.json</code>
-            for site metadata and navigation, and <code>src/layouts/</code> or <code>src/pages/</code>
-            for the final Astro presentation.
+            The generated project is intended as an editable starting point. Review its layout,
+            navigation, assets, and redirects before deployment.
           </p>
         </section>
 
-        <section class="surface">
-          <h2>Current limitations and scope</h2>
+        <section>
+          <h2>Authentication</h2>
+          <p>
+            Public sites normally require no authentication. For private content, use the
+            browser-authentication and storage-state options described in the
+            <a href="https://github.com/krahd/squarespace-to-astro/blob/main/USER_GUIDE.md#authentication-and-private-content">user guide</a>.
+          </p>
+          <p>The automated browser-authentication flow does not support interactive two-factor authentication.</p>
+        </section>
+
+        <section id="limitations">
+          <h2>Limitations</h2>
           <ul>
-            <li>2FA is not supported in the automated browser-auth flow.</li>
-            <li>Commerce, events, forms, members, and full Squarespace admin automation are not migrated.</li>
-            <li>Redirect generation exists, but redirect mappings should still be reviewed before production.</li>
-            <li>The generated Astro project should be reviewed and edited before production use.</li>
+            <li>Commerce and checkout data are not migrated.</li>
+            <li>Events are not migrated.</li>
+            <li>Forms and form submissions are not migrated.</li>
+            <li>Members-only systems are not migrated.</li>
+            <li>Squarespace administration settings are not migrated.</li>
+            <li>Complex layouts may require manual revision after generation.</li>
           </ul>
         </section>
 
-        <section class="surface links">
+        <section>
           <h2>Documentation</h2>
-          <ul>
-            <li><a href="https://github.com/krahd/squarespace-to-astro/blob/main/USER_GUIDE.md">Detailed user guide</a></li>
-            <li><a href="https://github.com/krahd/squarespace-to-astro/blob/main/README.md">Repository overview</a></li>
+          <ul class="links">
+            <li><a href="https://github.com/krahd/squarespace-to-astro/blob/main/README.md">README</a></li>
+            <li><a href="https://github.com/krahd/squarespace-to-astro/blob/main/USER_GUIDE.md">User guide</a></li>
             <li><a href="https://github.com/krahd/squarespace-to-astro/blob/main/CONTRIBUTING.md">Contributing</a></li>
-            <li><a href="https://github.com/krahd/squarespace-to-astro/blob/main/DEVELOPMENT.md">Development guide</a></li>
-            <li><a href="https://github.com/krahd/squarespace-to-astro/blob/main/RELEASE.md">Release process</a></li>
+            <li><a href="https://github.com/krahd/squarespace-to-astro/blob/main/DEVELOPMENT.md">Development</a></li>
             <li><a href="https://github.com/krahd/squarespace-to-astro/blob/main/CHANGELOG.md">Changelog</a></li>
-            <li><a href="https://github.com/krahd/squarespace-to-astro/releases">GitHub releases</a></li>
+            <li><a href="https://github.com/krahd/squarespace-to-astro/releases">Releases</a></li>
           </ul>
         </section>
       </main>
