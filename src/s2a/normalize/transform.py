@@ -7,8 +7,11 @@ def build_report(snapshot: CrawlSnapshot) -> CrawlReport:
     ok_pages = 0
     pages_with_json = 0
     password_gated_pages = 0
+    pages_with_media = 0
+    unresolved_media_mentions = 0
     unique_assets: set[str] = set()
     unique_internal_links: set[str] = set()
+    unique_media: set[tuple[str, str, str]] = set()
     warnings = list(snapshot.probe.warnings) + list(snapshot.warnings)
     page_entries: list[PageReportEntry] = []
     manual_follow_up: list[str] = []
@@ -23,6 +26,14 @@ def build_report(snapshot: CrawlSnapshot) -> CrawlReport:
         if page.password_gate_detected:
             password_gated_pages += 1
 
+        if page.media:
+            pages_with_media += 1
+        for reference in page.media:
+            unique_media.add(
+                (reference.provider, reference.video_id, reference.privacy_token)
+            )
+        unresolved_media_mentions += len(page.unresolved_media)
+
         unique_assets.update(page.asset_urls)
         unique_internal_links.update(page.internal_links)
         warnings.extend(page.warnings)
@@ -34,6 +45,8 @@ def build_report(snapshot: CrawlSnapshot) -> CrawlReport:
                 title=page.title,
                 json_available=bool(page.json_probe and page.json_probe.available),
                 password_gate_detected=page.password_gate_detected,
+                media_count=len(page.media),
+                unresolved_media_count=len(page.unresolved_media),
             )
         )
 
@@ -63,6 +76,11 @@ def build_report(snapshot: CrawlSnapshot) -> CrawlReport:
             "No Squarespace JSON endpoints were detected; later migration stages will rely mostly on rendered HTML fallbacks."
         )
 
+    if unresolved_media_mentions > 0:
+        manual_follow_up.append(
+            "Some pages mention Vimeo or YouTube but no stable video ID was extracted. Review media_manifest.json before treating the media inventory as complete."
+        )
+
     if password_gated_pages > 0 or snapshot.probe.password_gate_detected:
         manual_follow_up.append(
             "Password-gated pages were detected. Use auth-browser or crawl/migrate with --site-password or --storage-state to capture authenticated content before generating the final site."
@@ -87,6 +105,9 @@ def build_report(snapshot: CrawlSnapshot) -> CrawlReport:
         unique_assets=len(unique_assets),
         unique_internal_links=len(unique_internal_links),
         sitemap_entries=len(snapshot.probe.sitemap_entries),
+        unique_media=len(unique_media),
+        pages_with_media=pages_with_media,
+        unresolved_media_mentions=unresolved_media_mentions,
         rss_feeds=snapshot.probe.rss_feeds,
         manual_follow_up=manual_follow_up,
         pages=page_entries,
