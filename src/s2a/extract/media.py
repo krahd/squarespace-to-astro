@@ -18,7 +18,7 @@ VIMEO_URL_RE = re.compile(
 YOUTUBE_URL_RE = re.compile(
     r"(?P<url>(?:https?:)?//(?:"
     r"(?:www\.)?youtube(?:-nocookie)?\.com/"
-    r"(?:(?:watch\?[^\s\"'<>]*?[?&]v=)|(?:embed|shorts|live)/)"
+    r"(?:(?:watch\?(?:[^\s\"'<>]*?&)?v=)|(?:embed|shorts|live)/)"
     r"|youtu\.be/)"
     r"(?P<id>[A-Za-z0-9_-]{11})(?P<tail>[^\s\"'<>\\]*))",
     re.IGNORECASE,
