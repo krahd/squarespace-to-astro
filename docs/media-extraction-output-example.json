@@ -1,0 +1,32 @@
+{
+  "generated_at": "2026-07-24T00:00:00+00:00",
+  "target_url": "https://example.com/",
+  "counts": {
+    "media_references": 1,
+    "pages_with_media": 1,
+    "unresolved_provider_mentions": 0,
+    "by_provider": {
+      "vimeo": 1
+    }
+  },
+  "items": [
+    {
+      "owner_url": "https://example.com/work",
+      "owner_route": "/work",
+      "provider": "vimeo",
+      "video_id": "123456789",
+      "privacy_token": "privatehash",
+      "source_url": "https://player.vimeo.com/video/123456789?h=privatehash",
+      "embed_url": "https://player.vimeo.com/video/123456789?h=privatehash",
+      "source_kinds": [
+        "json"
+      ],
+      "detection_methods": [
+        "url"
+      ],
+      "confidence": "high",
+      "occurrences": 1
+    }
+  ],
+  "unresolved": []
+}
