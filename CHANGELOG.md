@@ -8,6 +8,7 @@ The format is based on Keep a Changelog, and this project uses semantic versioni
 
 ### Unreleased
 
+- Crawl now extracts Vimeo and YouTube references from rendered HTML and Squarespace JSON, including encoded and lazy-loaded video-block configuration. Page snapshots and reports include media counts, `media_manifest.json` records provider IDs and unresolved mentions, and unlisted Vimeo privacy hashes are preserved.
 - Crawl and probe now collect same-origin URLs from homepage HTML, sitemap entries, RSS/Atom feeds, and Squarespace JSON payloads in deterministic order, and off-origin redirects are now represented locally instead of pulling external HTML into the internal snapshot.
 - `migrate` now defaults `--max-pages` to 200 and the CLI help text reflects the higher production migration ceiling.
 - Crawl now skips canonical duplicate pages whose canonical URL has already been crawled, which keeps sitemap-only collection indexes out of generated manifests.
@@ -146,7 +147,7 @@ The format is based on Keep a Changelog, and this project uses semantic versioni
 ### Changed in 0.2.2
 
 - installation guidance now distinguishes Homebrew, standalone bundle, and source-based workflows
-- documentation split now separates the public website, user guide, repository overview, contributor guide, development guide, and release process
+- documentation split now separates the public website, user guide, repository overview, contributor guide, development guide, release process
 
 ### Fixed in 0.2.2
 
@@ -158,7 +159,7 @@ The format is based on Keep a Changelog, and this project uses semantic versioni
 ### Added in 0.2.1
 
 - package metadata in `pyproject.toml`
-- GitHub Pages project website published from `docs/`
+- GitHub Pages project website published from the repository
 - GitHub Release publication with source distribution artifacts
 
 ### Changed in 0.2.1
