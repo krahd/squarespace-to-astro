@@ -1,8 +1,14 @@
-from s2a.normalize.models import CrawlSnapshot, JsonDataProbe, PageSnapshot, SiteProbe
+from s2a.normalize.models import (
+    CrawlSnapshot,
+    JsonDataProbe,
+    MediaReference,
+    PageSnapshot,
+    SiteProbe,
+)
 from s2a.normalize.transform import build_report
 
 
-def test_build_report_counts_json_and_password_pages() -> None:
+def test_build_report_counts_json_password_and_media_pages() -> None:
     probe = SiteProbe(
         target_url="https://example.com/",
         final_home_url="https://example.com/",
@@ -45,6 +51,14 @@ def test_build_report_counts_json_and_password_pages() -> None:
                 ),
                 asset_urls=["https://example.com/logo.png"],
                 internal_links=["https://example.com/about"],
+                media=[
+                    MediaReference(
+                        provider="vimeo",
+                        video_id="123456789",
+                        source_url="https://vimeo.com/123456789",
+                        embed_url="https://player.vimeo.com/video/123456789",
+                    )
+                ],
             ),
             PageSnapshot(
                 requested_url="https://example.com/private",
@@ -67,6 +81,10 @@ def test_build_report_counts_json_and_password_pages() -> None:
     assert report.password_gated_pages == 1
     assert report.unique_assets == 1
     assert report.unique_internal_links == 1
+    assert report.unique_media == 1
+    assert report.pages_with_media == 1
+    assert report.unresolved_media_mentions == 0
+    assert report.pages[0].media_count == 1
     assert report.manual_follow_up == [
         "Password-gated pages were detected. Use auth-browser or crawl/migrate with --site-password or --storage-state to capture authenticated content before generating the final site."
     ]
