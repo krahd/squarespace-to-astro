@@ -13,6 +13,7 @@ from defusedxml.common import DefusedXmlException
 
 from s2a.extract.assets import extract_asset_references
 from s2a.extract.json_data import extract_json_links, probe_json_data
+from s2a.extract.media import build_media_manifest, extract_media_references
 from s2a.files import write_json, write_text
 from s2a.net import fetch_text, is_html_content_type
 from s2a.normalize.models import CrawlSnapshot, PageSnapshot, SiteProbe
@@ -142,9 +143,12 @@ def crawl_site(
         external_links: list[str] = []
         asset_urls: list[str] = []
         assets = []
+        media = []
+        unresolved_media = []
         squarespace_indicators: list[str] = []
         password_gate_detected = False
         json_probe = None
+        json_payload = None
 
         if not is_html_content_type(fetch.content_type):
             if fetch.text:
@@ -197,6 +201,10 @@ def crawl_site(
                 for url in extract_json_links(json_payload, probe.site_origin):
                     enqueue(url)
 
+            media_result = extract_media_references(fetch.text, json_payload)
+            media = media_result.references
+            unresolved_media = media_result.unresolved
+
         pages.append(
             PageSnapshot(
                 requested_url=requested_url,
@@ -211,6 +219,8 @@ def crawl_site(
                 external_links=external_links,
                 asset_urls=asset_urls,
                 assets=assets,
+                media=media,
+                unresolved_media=unresolved_media,
                 squarespace_indicators=squarespace_indicators,
                 password_gate_detected=password_gate_detected,
                 json_probe=json_probe,
@@ -234,7 +244,7 @@ def crawl_site(
             f"Stopped after reaching the max-pages limit ({max_pages}); additional internal URLs remain uncrawled."
         )
 
-    return CrawlSnapshot(
+    snapshot = CrawlSnapshot(
         generated_at=datetime.now(UTC).isoformat(),
         target_url=probe.target_url,
         base_url=probe.final_home_url or probe.target_url,
@@ -242,6 +252,8 @@ def crawl_site(
         pages=pages,
         warnings=crawl_warnings,
     )
+    write_json(output_root / "media_manifest.json", build_media_manifest(snapshot))
+    return snapshot
 
 
 def crawl_progress_total(
@@ -265,7 +277,7 @@ def extract_urls_from_rss_feeds(
     """Fetch each RSS feed URL and extract ``<link>`` item URLs.
 
     Only URLs that belong to the same site origin are returned so the crawl
-    stays scoped to the target site.  Errors for individual feeds are silently
+    stays scoped to the target site. Errors for individual feeds are silently
     ignored — RSS supplement is best-effort.
     """
     discovered: list[str] = []
