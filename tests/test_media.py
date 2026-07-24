@@ -57,6 +57,22 @@ def test_extracts_youtube_nocookie_from_escaped_json_html() -> None:
     assert reference.embed_url == "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"
 
 
+def test_extracts_standard_youtube_watch_urls() -> None:
+    result = extract_media_references(
+        (
+            '<a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ">one</a>'
+            '<a href="https://www.youtube.com/watch?si=abc123&v=9bZkp7q19f0">two</a>'
+        ),
+        None,
+    )
+
+    assert result.unresolved == []
+    assert [(item.provider, item.video_id) for item in result.references] == [
+        ("youtube", "9bZkp7q19f0"),
+        ("youtube", "dQw4w9WgXcQ"),
+    ]
+
+
 def test_merges_html_and_json_references_without_losing_privacy_hash() -> None:
     html = '<a href="https://vimeo.com/246813579">Watch</a>'
     payload = {
