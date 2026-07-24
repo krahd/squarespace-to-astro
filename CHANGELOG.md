@@ -6,7 +6,9 @@ The format is based on Keep a Changelog, and this project uses semantic versioni
 
 ## [Unreleased]
 
-### Unreleased
+## [0.5.8] - 2026-07-24
+
+### Changed in 0.5.8
 
 - Crawl now extracts Vimeo and YouTube references from rendered HTML and Squarespace JSON, including encoded and lazy-loaded video-block configuration. Page snapshots and reports include media counts, `media_manifest.json` records provider IDs and unresolved mentions, and unlisted Vimeo privacy hashes are preserved.
 - Crawl and probe now collect same-origin URLs from homepage HTML, sitemap entries, RSS/Atom feeds, and Squarespace JSON payloads in deterministic order, and off-origin redirects are now represented locally instead of pulling external HTML into the internal snapshot.
@@ -20,7 +22,7 @@ The format is based on Keep a Changelog, and this project uses semantic versioni
 - The generated Astro smoke workflow now guarantees temporary HTTP server cleanup and fails when `generated/` contains no direct `package.json` Astro projects.
 - `default_layout_strategy_for_mode` keeps its unused mode argument as `_fidelity_mode` so linting stays quiet without changing behaviour.
 - `content.config.ts` generation now uses consistent four-space `presentation` indentation, and new symlink-clean regression tests lock `--clean` behaviour around symlinked output directories.
-- README and user guide docs now distinguish the tagged `v0.5.7` release from `main` / next-release options such as `--clean` and `--upgrade-legacy-assets`.
+- README and user guide documentation now describe `--clean` and `--upgrade-legacy-assets` as part of the tagged release.
 
 ## [0.5.7] - 2026-05-06
 
