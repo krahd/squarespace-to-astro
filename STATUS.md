@@ -1,6 +1,6 @@
 # squarespace-to-astro – Project Status
 
-Last updated: 2026-06-08 18:43
+Last updated: 2026-07-24 16:53
 
 ## Project purpose
 
@@ -114,6 +114,8 @@ python scripts/build_binary_release.py
 
 ## Recent changes
 
+- The README now begins with Homebrew installation and a minimal migration example, while retaining links to the detailed user and development documentation.
+- The static project website now uses a conventional documentation layout without external fonts, gradients, promotional cards, badges, animation, or marketing-oriented copy.
 - Probe and crawl now collect same-origin URLs from homepage HTML, sitemap entries, RSS/Atom feeds, and Squarespace JSON payloads in deterministic order, and off-origin redirects are represented as local placeholder pages with warnings instead of being treated as internal content.
 - `migrate` now defaults `--max-pages` to 200, and the CLI help text reflects the higher production crawl ceiling.
 - The crawler now skips canonical duplicate pages whose canonical URL has already been crawled, and the route-coverage tests now reflect the current redirect and manifest contract.
@@ -126,10 +128,8 @@ python scripts/build_binary_release.py
 - CI now tests Python 3.11, 3.12, and 3.13, pins Node 20 in both GitHub Actions workflows, restores the Playwright browser cache before installation, and treats generated Astro install/build failures as fatal with explicit `dist/` and `index.html` checks.
 - The generated Astro smoke workflow now fails early when `generated/` exists without any direct `package.json` Astro projects and always tears down its temporary HTTP server.
 - The generated-site build helper clears stale `node_modules` before `npm ci`, which keeps repeated local and CI reruns idempotent.
-- The repository README and user guide now distinguish the tagged `v0.5.8` release from `main` / next-release options, and the guide labels `--clean` and `--upgrade-legacy-assets` accordingly.
-- Release and installation docs now state that standalone bundles cover macOS arm64 and Linux x86_64 only; Windows users are directed to source installs until a Windows binary workflow is added.
-- The static project website in `docs/` was refreshed with current `v0.5.8` messaging, updated migration guidance, and an improved responsive visual design.
-- The top-level `ignored/` scratch directory is now excluded from source control via `.gitignore`.
+- Release and installation docs state that standalone bundles cover macOS arm64 and Linux x86_64 only; Windows users are directed to source installs until a Windows binary workflow is added.
+- The top-level `ignored/` scratch directory is excluded from source control via `.gitignore`.
 - `v0.5.8` added CI Node-backed Astro build smoke testing, redirect summary/report output, identity redirect filtering, RSS feed crawl seeding fallback, sparse-sitemap guidance improvements, and auth storage-state staleness checks.
 - `v0.5.6` included post-release housekeeping and older release/tag removal.
 - `v0.5.2` added streaming asset downloads, redirect generation, auth artefact permission hardening, CI workflow, and redirect tests.
@@ -144,6 +144,7 @@ Latest local verification:
 - CI now runs Python 3.11-3.13, Node 20, and the generated Astro smoke workflow separately.
 - Binary bundles are built with PyInstaller for macOS arm64 and Linux x86_64.
 - Homebrew formula is rendered by `scripts/render_homebrew_formula.py` and published to `krahd/homebrew-tap`.
+- Documentation-only changes on 2026-07-24 were checked by re-reading the committed Markdown, HTML, and CSS; the Python test suite was not rerun because application behaviour did not change.
 
 ## Known issues, risks, and limitations
 
@@ -187,4 +188,4 @@ Current risks:
 - Migration output prioritises editability while offering fidelity controls for layout-heavy pages.
 ---
 
-Last updated: 2026-06-08 18:43
+Last updated: 2026-07-24 16:53
