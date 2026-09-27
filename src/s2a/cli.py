@@ -52,6 +52,7 @@ def generate_astro_project(
     layout_strategy: str = "hybrid",
     markdown_first: bool = False,
     upgrade_legacy_assets: bool = False,
+    editor: str | None = None,
 ) -> AstroGenerationResult:
     kwargs: dict[str, Any] = {
         "snapshot_path": snapshot_path,
@@ -64,6 +65,7 @@ def generate_astro_project(
         "layout_strategy": layout_strategy,
         "markdown_first": markdown_first,
         "upgrade_legacy_assets": upgrade_legacy_assets,
+        "editor": editor,
     }
     return _generate_astro_project(**kwargs)
 
