@@ -1017,7 +1017,7 @@ def render_astro_config(
             "});",
             "",
         ])
-        return "\\n".join(lines)
+        return "\n".join(lines)
 
     lines = [
         "import { defineConfig } from 'astro/config';",
@@ -1030,7 +1030,7 @@ def render_astro_config(
         lines.append(f"  base: {json.dumps(normalize_base_path(base_path))},")
     lines.append("});")
     lines.append("")
-    return "\\n".join(lines)
+    return "\n".join(lines)
 def render_tsconfig() -> str:
     return '{\n  "extends": "astro/tsconfigs/strict"\n}\n'
 
