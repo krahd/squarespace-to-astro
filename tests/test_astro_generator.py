@@ -1752,7 +1752,10 @@ def test_generate_astro_project_tina_editor_writes_visual_editing_scaffold(tmp_p
     assert "tina()" in (output_dir / "astro.config.mjs").read_text(encoding="utf-8")
     assert "\\n" not in (output_dir / "astro.config.mjs").read_text(encoding="utf-8")
     assert (output_dir / "tina/config.ts").exists()
-    assert (output_dir / "src/pages/tina-island/[name].ts").exists()
+    assert (output_dir / "src/tina-island-route.ts").exists()
+    astro_config = (output_dir / "astro.config.mjs").read_text(encoding="utf-8")
+    assert "tinaIslandRoute()" in astro_config
+    assert "prerender: false" in astro_config
     assert (output_dir / "src/components/TinaPageBody.astro").exists()
     assert (output_dir / "src/components/TinaHomeBody.astro").exists()
     home = read_json(output_dir / "src/data/home.json")

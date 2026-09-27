@@ -879,7 +879,7 @@ def write_project(
         write_text(output_dir / "src/lib/tina-islands.ts", render_tina_islands())
         write_text(output_dir / "src/components/TinaPageBody.astro", render_tina_page_body())
         write_text(output_dir / "src/components/TinaHomeBody.astro", render_tina_home_body())
-        write_text(output_dir / "src/pages/tina-island/[name].ts", render_tina_island_route())
+        write_text(output_dir / "src/tina-island-route.ts", render_tina_island_route())
         write_text(output_dir / "src/pages/index.astro", render_home_page(editor=editor))
         write_text(output_dir / "src/pages/[...slug].astro", render_generic_page(editor=editor))
     else:
@@ -1000,6 +1000,19 @@ def render_astro_config(
             "import tina from '@tinacms/astro/integration';",
             "import { tinaAdminDevRedirect } from '@tinacms/astro/vite';",
             "",
+            "const tinaIslandRoute = () => ({",
+            "  name: 's2a-tina-island-route',",
+            "  hooks: {",
+            "    'astro:config:setup': ({ injectRoute }) => {",
+            "      injectRoute({",
+            "        pattern: '/tina-island/[name]',",
+            "        entrypoint: new URL('./src/tina-island-route.ts', import.meta.url),",
+            "        prerender: false,",
+            "      });",
+            "    },",
+            "  },",
+            "});",
+            "",
             "export default defineConfig({",
         ]
         if manifest.base_url:
@@ -1009,7 +1022,7 @@ def render_astro_config(
         lines.extend([
             "  output: 'static',",
             "  adapter: node({ mode: 'standalone' }),",
-            "  integrations: [tina()],",
+            "  integrations: [tina(), tinaIslandRoute()],",
             "  vite: {",
             "    plugins: [tinaAdminDevRedirect()],",
             "    ssr: { noExternal: ['@tinacms/astro', '@tinacms/bridge'] },",
@@ -2194,7 +2207,7 @@ const { data } = Astro.props;
 def render_tina_island_route() -> str:
     return """import type { APIRoute } from 'astro';
 import { experimental_createIslandRoute } from '@tinacms/astro/experimental';
-import { islands } from '../../lib/tina-islands';
+import { islands } from './lib/tina-islands';
 
 export const prerender = false;
 export const ALL: APIRoute = experimental_createIslandRoute(islands);
