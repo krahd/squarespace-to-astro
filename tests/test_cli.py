@@ -353,6 +353,8 @@ def test_build_parser_accepts_fidelity_flags_for_generate_astro_and_migrate() ->
             "--markdown",
             "--upgrade-legacy-assets",
             "--clean",
+            "--editor",
+            "tina",
         ]
     )
     migrate_args = parser.parse_args(
@@ -369,6 +371,7 @@ def test_build_parser_accepts_fidelity_flags_for_generate_astro_and_migrate() ->
     assert generate_args.markdown_first is True
     assert generate_args.upgrade_legacy_assets is True
     assert generate_args.clean is True
+    assert generate_args.editor == "tina"
     assert migrate_args.choose_layout_strategy is True
     assert migrate_args.clean is True
     assert not hasattr(migrate_args, "upgrade_legacy_assets")
@@ -479,6 +482,8 @@ def test_generate_astro_main_passes_fidelity_settings_to_generator(
             "components",
             "--markdown",
             "--upgrade-legacy-assets",
+            "--editor",
+            "tina",
         ]
     )
 
@@ -487,6 +492,7 @@ def test_generate_astro_main_passes_fidelity_settings_to_generator(
     assert captured["layout_strategy"] == "components"
     assert captured["markdown_first"] is True
     assert captured["upgrade_legacy_assets"] is True
+    assert captured["editor"] == "tina"
 
 
 def test_generate_astro_main_clean_removes_stale_files(monkeypatch, tmp_path) -> None:

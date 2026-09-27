@@ -52,6 +52,7 @@ def generate_astro_project(
     layout_strategy: str = "hybrid",
     markdown_first: bool = False,
     upgrade_legacy_assets: bool = False,
+    editor: str | None = None,
 ) -> AstroGenerationResult:
     kwargs: dict[str, Any] = {
         "snapshot_path": snapshot_path,
@@ -64,6 +65,7 @@ def generate_astro_project(
         "layout_strategy": layout_strategy,
         "markdown_first": markdown_first,
         "upgrade_legacy_assets": upgrade_legacy_assets,
+        "editor": editor,
     }
     return _generate_astro_project(**kwargs)
 
@@ -241,6 +243,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Remove the Astro output directory before writing the generated project.",
     )
+    astro_parser.add_argument(
+        "--editor",
+        choices=["tina"],
+        help="Generate an integrated visual editor. Currently supported: tina.",
+    )
     add_fidelity_arguments(astro_parser)
 
     migrate_parser = subparsers.add_parser(
@@ -292,6 +299,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--clean",
         action="store_true",
         help="Remove the Astro output directory before writing the generated project.",
+    )
+    migrate_parser.add_argument(
+        "--editor",
+        choices=["tina"],
+        help="Generate an integrated visual editor. Currently supported: tina.",
     )
 
     return parser
@@ -505,6 +517,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 layout_strategy=layout_strategy,
                 markdown_first=markdown_first,
                 upgrade_legacy_assets=args.upgrade_legacy_assets,
+                editor=getattr(args, "editor", None),
             )
         except AssetManifestUpgradeError as exc:
             console.emit(str(exc), always=True)
@@ -731,6 +744,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     layout_strategy=layout_strategy,
                     markdown_first=markdown_first,
                     upgrade_legacy_assets=False,
+                    editor=getattr(args, "editor", None),
                 )
             except AssetManifestUpgradeError as exc:
                 console.emit(str(exc), always=True)

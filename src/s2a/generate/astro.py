@@ -94,6 +94,7 @@ def generate_astro_project(
     layout_strategy: str = "hybrid",
     markdown_first: bool = False,
     upgrade_legacy_assets: bool = False,
+    editor: str | None = None,
 ) -> AstroGenerationResult:
     snapshot = read_json(snapshot_path)
     xml_import = read_json(xml_import_path) if xml_import_path else None
@@ -134,6 +135,7 @@ def generate_astro_project(
         project_name=project_name,
         snapshot_root=snapshot_path.parent,
         asset_manifest=asset_manifest,
+        editor=editor,
     )
     write_json(output_dir / "migration-manifest.json", manifest)
 
@@ -839,13 +841,18 @@ def write_project(
     project_name: str | None,
     snapshot_root: Path,
     asset_manifest: dict | None,
+    editor: str | None = None,
 ) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "src/content/pages").mkdir(parents=True, exist_ok=True)
     (output_dir / "src/content/posts").mkdir(parents=True, exist_ok=True)
-    write_json(output_dir / "package.json", render_package_json(manifest, project_name))
+    write_json(
+        output_dir / "package.json",
+        render_package_json(manifest, project_name, editor=editor),
+    )
     write_text(
-        output_dir / "astro.config.mjs", render_astro_config(manifest, base_path)
+        output_dir / "astro.config.mjs",
+        render_astro_config(manifest, base_path, editor=editor),
     )
     write_text(output_dir / "tsconfig.json", render_tsconfig())
     write_text(
@@ -856,9 +863,28 @@ def write_project(
     write_text(output_dir / "src/utils/routing.ts", render_routing_util())
     write_text(output_dir / "src/styles/site.css", render_site_css())
     write_json(output_dir / "src/data/site.json", render_site_data(manifest))
-    write_text(output_dir / "src/pages/index.astro", render_home_page())
-    write_text(output_dir / "src/pages/[...slug].astro", render_generic_page())
     copy_localized_assets(output_dir, snapshot_root, asset_manifest)
+
+    if editor == "tina":
+        home_entry = next((entry for entry in manifest.pages if entry.home), None)
+        home_data = extract_home_editor_data(home_entry) if home_entry else {
+            "title": manifest.site_title,
+            "description": manifest.site_description,
+            "items": [],
+            "legacyHtml": "",
+        }
+        write_json(output_dir / "src/data/home.json", home_data)
+        write_text(output_dir / "tina/config.ts", render_tina_config(manifest))
+        write_text(output_dir / "src/lib/tina-data.ts", render_tina_data())
+        write_text(output_dir / "src/lib/tina-islands.ts", render_tina_islands())
+        write_text(output_dir / "src/components/TinaPageBody.astro", render_tina_page_body())
+        write_text(output_dir / "src/components/TinaHomeBody.astro", render_tina_home_body())
+        write_text(output_dir / "src/tina-island-route.ts", render_tina_island_route())
+        write_text(output_dir / "src/pages/index.astro", render_home_page(editor=editor))
+        write_text(output_dir / "src/pages/[...slug].astro", render_generic_page(editor=editor))
+    else:
+        write_text(output_dir / "src/pages/index.astro", render_home_page())
+        write_text(output_dir / "src/pages/[...slug].astro", render_generic_page())
 
     if manifest.posts:
         blog_segments = [
@@ -871,7 +897,11 @@ def write_project(
         write_text(blog_dir / "index.astro", render_blog_index(import_prefix))
         write_text(blog_dir / "[...slug].astro", render_blog_post(import_prefix))
 
-    write_content_files(output_dir / "src/content/pages", manifest.pages)
+    page_entries = manifest.pages
+    if editor == "tina":
+        # The homepage is represented by structured src/data/home.json in editor mode.
+        page_entries = [entry for entry in manifest.pages if not entry.home]
+    write_content_files(output_dir / "src/content/pages", page_entries)
     write_content_files(output_dir / "src/content/posts", manifest.posts)
 
 
@@ -916,8 +946,12 @@ def render_markdown_file(frontmatter: dict, body: str) -> str:
     return f"---\n{yaml_frontmatter}\n---\n\n{body}\n"
 
 
-def render_package_json(manifest: AstroManifest, project_name: str | None) -> dict:
-    return {
+def render_package_json(
+    manifest: AstroManifest,
+    project_name: str | None,
+    editor: str | None = None,
+) -> dict:
+    package = {
         "name": project_name or slugify_name(manifest.site_title),
         "private": True,
         "type": "module",
@@ -930,9 +964,74 @@ def render_package_json(manifest: AstroManifest, project_name: str | None) -> di
             "astro": "^5.0.0",
         },
     }
+    if editor == "tina":
+        package["engines"] = {"node": ">=22.22.0"}
+        package["scripts"] = {
+            "dev": 'tinacms dev -c "astro dev"',
+            "edit": 'tinacms dev -c "astro dev --open /admin/index.html"',
+            "build": 'tinacms build --local --skip-cloud-checks -c "astro build"',
+            "build:site": "astro build",
+            "preview": "astro preview",
+        }
+        package["dependencies"] = {
+            "@astrojs/node": "^10.1.4",
+            "@tinacms/astro": "^0.7.0",
+            "astro": "^6.4.4",
+        }
+        package["devDependencies"] = {
+            "@tinacms/cli": "^3.0.0",
+            "react": "^19.2.7",
+            "react-dom": "^19.2.7",
+            "tinacms": "^3.14.0",
+            "typescript": "^6.0.3",
+        }
+    return package
 
 
-def render_astro_config(manifest: AstroManifest, base_path: str | None) -> str:
+def render_astro_config(
+    manifest: AstroManifest,
+    base_path: str | None,
+    editor: str | None = None,
+) -> str:
+    if editor == "tina":
+        lines = [
+            "import { defineConfig } from 'astro/config';",
+            "import node from '@astrojs/node';",
+            "import tina from '@tinacms/astro/integration';",
+            "import { tinaAdminDevRedirect } from '@tinacms/astro/vite';",
+            "",
+            "const tinaIslandRoute = () => ({",
+            "  name: 's2a-tina-island-route',",
+            "  hooks: {",
+            "    'astro:config:setup': ({ injectRoute }) => {",
+            "      injectRoute({",
+            "        pattern: '/tina-island/[name]',",
+            "        entrypoint: new URL('./src/tina-island-route.ts', import.meta.url),",
+            "        prerender: false,",
+            "      });",
+            "    },",
+            "  },",
+            "});",
+            "",
+            "export default defineConfig({",
+        ]
+        if manifest.base_url:
+            lines.append(f"  site: {json.dumps(manifest.base_url)},")
+        if base_path:
+            lines.append(f"  base: {json.dumps(normalize_base_path(base_path))},")
+        lines.extend([
+            "  output: 'static',",
+            "  adapter: node({ mode: 'standalone' }),",
+            "  integrations: [tina(), tinaIslandRoute()],",
+            "  vite: {",
+            "    plugins: [tinaAdminDevRedirect()],",
+            "    ssr: { noExternal: ['@tinacms/astro', '@tinacms/bridge'] },",
+            "  },",
+            "});",
+            "",
+        ])
+        return "\n".join(lines)
+
     lines = [
         "import { defineConfig } from 'astro/config';",
         "",
@@ -945,8 +1044,6 @@ def render_astro_config(manifest: AstroManifest, base_path: str | None) -> str:
     lines.append("});")
     lines.append("")
     return "\n".join(lines)
-
-
 def render_tsconfig() -> str:
     return '{\n  "extends": "astro/tsconfigs/strict"\n}\n'
 
@@ -1784,7 +1881,9 @@ def render_site_data(manifest: AstroManifest) -> dict:
     }
 
 
-def render_home_page() -> str:
+def render_home_page(editor: str | None = None) -> str:
+    if editor == "tina":
+        return render_tina_home_page()
     return """---
 import { getCollection, render } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
@@ -1810,7 +1909,9 @@ const isImmersive = home.data.presentation === 'immersive';
 """
 
 
-def render_generic_page() -> str:
+def render_generic_page(editor: str | None = None) -> str:
+    if editor == "tina":
+        return render_tina_generic_page()
     return """---
 import { getCollection, render } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
@@ -1849,6 +1950,317 @@ const isImmersive = entry.data.presentation === 'immersive';
             </div>
         </article>
     )}
+</BaseLayout>
+"""
+
+
+def extract_home_editor_data(entry) -> dict:
+    soup = BeautifulSoup(entry.body or "", "html.parser")
+    items: list[dict[str, str]] = []
+    seen: set[str] = set()
+    candidates = soup.select("a.grid-item[href], a.portfolio-item[href], a[href]")
+    for anchor in candidates:
+        image = anchor.find("img")
+        if image is None:
+            continue
+        href = (anchor.get("href") or "").strip()
+        src = (image.get("src") or "").strip()
+        if not href or not src:
+            continue
+        key = f"{href}|{src}"
+        if key in seen:
+            continue
+        title_node = anchor.select_one(
+            ".portfolio-title, .image-title, h1, h2, h3, h4, h5, h6"
+        )
+        title = (
+            title_node.get_text(" ", strip=True)
+            if title_node is not None
+            else (image.get("alt") or "").strip()
+        )
+        items.append(
+            {
+                "title": title,
+                "href": href,
+                "image": src,
+                "alt": (image.get("alt") or title or "").strip(),
+            }
+        )
+        seen.add(key)
+
+    if not items:
+        markdown_card = re.compile(
+            r"\[!\[(?P<alt>[^\]]*)\]\((?P<image>[^)]+)\)\]\((?P<href>[^)]+)\)"
+        )
+        for match in markdown_card.finditer(entry.body or ""):
+            href = match.group("href").strip()
+            src = match.group("image").strip()
+            alt = match.group("alt").strip()
+            key = f"{href}|{src}"
+            if key in seen:
+                continue
+            items.append({"title": alt, "href": href, "image": src, "alt": alt})
+            seen.add(key)
+
+    return {
+        "title": entry.title,
+        "description": entry.description,
+        "items": items,
+        "legacyHtml": "" if items else (entry.body or ""),
+    }
+
+
+def render_tina_config(manifest: AstroManifest) -> str:
+    page_routes = {
+        entry.entry_id: entry.route_path
+        for entry in manifest.pages
+        if not entry.home and entry.route_path
+    }
+    page_routes_json = json.dumps(page_routes, ensure_ascii=False, indent=2)
+    post_collection = ""
+    if manifest.posts:
+        post_collection = """
+      {
+        name: 'post',
+        label: 'Posts',
+        path: 'src/content/posts',
+        format: 'md',
+        fields: [
+          { type: 'string', name: 'title', label: 'Title', isTitle: true, required: true },
+          { type: 'string', name: 'slug', label: 'Slug', required: true },
+          { type: 'datetime', name: 'publishedAt', label: 'Published' },
+          { type: 'string', name: 'description', label: 'Description', ui: { component: 'textarea' } },
+          { type: 'string', name: 'categories', label: 'Categories', list: true },
+          { type: 'string', name: 'tags', label: 'Tags', list: true },
+          { type: 'rich-text', name: 'body', label: 'Body', isBody: true },
+        ],
+      },"""
+    return f"""import {{ defineConfig }} from 'tinacms';
+
+const branch =
+  process.env.GITHUB_BRANCH ||
+  process.env.VERCEL_GIT_COMMIT_REF ||
+  process.env.CF_PAGES_BRANCH ||
+  process.env.HEAD ||
+  'main';
+
+const pageRoutes: Record<string, string> = {page_routes_json};
+
+export default defineConfig({{
+  branch,
+  clientId: process.env.PUBLIC_TINA_CLIENT_ID,
+  token: process.env.TINA_TOKEN,
+  build: {{ outputFolder: 'admin', publicFolder: 'public' }},
+  media: {{ tina: {{ mediaRoot: 'assets/images', publicFolder: 'public' }} }},
+  schema: {{
+    collections: [
+      {{
+        name: 'page',
+        label: 'Pages',
+        path: 'src/content/pages',
+        format: 'md',
+        ui: {{ router: ({{ document }}) => pageRoutes[document._sys.filename] }},
+        fields: [
+          {{ type: 'string', name: 'title', label: 'Title', isTitle: true, required: true }},
+          {{ type: 'string', name: 'slug', label: 'Slug', required: true }},
+          {{ type: 'string', name: 'routePath', label: 'Route', required: true }},
+          {{ type: 'string', name: 'description', label: 'Description', ui: {{ component: 'textarea' }} }},
+          {{ type: 'string', name: 'sourceUrl', label: 'Original Squarespace URL' }},
+          {{ type: 'string', name: 'canonicalUrl', label: 'Canonical URL' }},
+          {{ type: 'string', name: 'bodyFormat', label: 'Body format', options: ['markdown', 'html'] }},
+          {{ type: 'string', name: 'presentation', label: 'Presentation', options: ['standard', 'immersive'] }},
+          {{ type: 'rich-text', name: 'body', label: 'Content', isBody: true }},
+        ],
+      }},
+      {{
+        name: 'home',
+        label: 'Homepage',
+        path: 'src/data',
+        format: 'json',
+        match: {{ include: 'home' }},
+        ui: {{ global: true, router: () => '/' }},
+        fields: [
+          {{ type: 'string', name: 'title', label: 'Title', isTitle: true, required: true }},
+          {{ type: 'string', name: 'description', label: 'Description', ui: {{ component: 'textarea' }} }},
+          {{
+            type: 'object',
+            name: 'items',
+            label: 'Portfolio items',
+            list: true,
+            ui: {{ itemProps: (item) => ({{ label: item?.title || 'Portfolio item' }}) }},
+            fields: [
+              {{ type: 'string', name: 'title', label: 'Title', required: true }},
+              {{ type: 'image', name: 'image', label: 'Image', required: true }},
+              {{ type: 'string', name: 'alt', label: 'Alt text' }},
+              {{ type: 'string', name: 'href', label: 'Link', required: true }},
+            ],
+          }},
+          {{ type: 'string', name: 'legacyHtml', label: 'Legacy homepage HTML', ui: {{ component: 'textarea' }} }},
+        ],
+      }},
+{post_collection}
+    ],
+  }},
+}});
+"""
+
+
+def render_tina_data() -> str:
+    return """import { requestWithMetadata } from '@tinacms/astro/data';
+import client from '../../tina/__generated__/client';
+
+export const getPage = (filename: string) =>
+  requestWithMetadata(client.queries.page({ relativePath: `${filename}.md` }), { priority: 'primary' });
+
+export const getHome = () =>
+  requestWithMetadata(client.queries.home({ relativePath: 'home.json' }), { priority: 'primary' });
+
+export async function listPages() {
+  const result = await client.queries.pageConnection();
+  return (result.data.pageConnection.edges ?? []).flatMap((edge) => edge?.node ? [edge.node] : []);
+}
+
+export type CmsPage = Awaited<ReturnType<typeof getPage>>['data']['page'];
+export type CmsHome = Awaited<ReturnType<typeof getHome>>['data']['home'];
+"""
+
+
+def render_tina_islands() -> str:
+    return """import type { IslandRegistry } from '@tinacms/astro/experimental';
+import type { QueryResult } from '@tinacms/astro/data';
+import type { HomeQuery, PageQuery } from '../../tina/__generated__/types';
+import type { CmsHome, CmsPage } from './tina-data';
+import TinaPageBody from '../components/TinaPageBody.astro';
+import TinaHomeBody from '../components/TinaHomeBody.astro';
+import { getHome, getPage } from './tina-data';
+
+export const islands: IslandRegistry = {
+  page: {
+    fetch: (_request, params) => getPage(params.get('filename') ?? ''),
+    component: TinaPageBody,
+    wrapper: { tag: 'div' },
+    propsFromData: (data) => ({
+      data: (data as QueryResult<PageQuery>).data?.page as CmsPage | undefined,
+    }),
+  },
+  home: {
+    fetch: () => getHome(),
+    component: TinaHomeBody,
+    wrapper: { tag: 'div' },
+    propsFromData: (data) => ({
+      data: (data as QueryResult<HomeQuery>).data?.home as CmsHome | undefined,
+    }),
+  },
+};
+"""
+
+
+def render_tina_page_body() -> str:
+    return """---
+import TinaMarkdown from '@tinacms/astro/TinaMarkdown.astro';
+import type { CmsPage } from '../lib/tina-data';
+
+interface Props { data?: CmsPage | null; }
+const { data } = Astro.props;
+const isImmersive = data?.presentation === 'immersive';
+---
+{data && (isImmersive ? (
+  <article class="page-canvas page-canvas--immersive">
+    <div class="prose prose--immersive"><TinaMarkdown content={data.body} /></div>
+  </article>
+) : (
+  <article class="surface surface--article">
+    <header class="article-header">
+      <p class="eyebrow">Page</p>
+      <h1 class="article-title">{data.title}</h1>
+      {data.description && <p class="article-description">{data.description}</p>}
+    </header>
+    <div class="prose"><TinaMarkdown content={data.body} /></div>
+  </article>
+))}
+"""
+
+
+def render_tina_home_body() -> str:
+    return """---
+import type { CmsHome } from '../lib/tina-data';
+interface Props { data?: CmsHome | null; }
+const { data } = Astro.props;
+---
+{data && (
+  data.items?.length ? (
+    <div class="portfolio-grid-basic">
+      {data.items.map((item) => (
+        <a class="grid-item" href={item?.href || '#'}>
+          <div class="grid-image"><div class="grid-image-inner-wrapper">
+            {item?.image && <img src={item.image} alt={item.alt || item.title || ''} loading="lazy" />}
+          </div></div>
+          <div class="portfolio-text"><h3 class="portfolio-title">{item?.title}</h3></div>
+        </a>
+      ))}
+    </div>
+  ) : data.legacyHtml ? <Fragment set:html={data.legacyHtml} /> : null
+)}
+"""
+
+
+def render_tina_island_route() -> str:
+    return """import type { APIRoute } from 'astro';
+import { experimental_createIslandRoute } from '@tinacms/astro/experimental';
+import { islands } from './lib/tina-islands';
+
+export const prerender = false;
+export const ALL: APIRoute = experimental_createIslandRoute(islands);
+"""
+
+
+def render_tina_home_page() -> str:
+    return """---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import TinaIsland from '@tinacms/astro/TinaIsland.astro';
+import TinaHomeBody from '../components/TinaHomeBody.astro';
+import { getHome } from '../lib/tina-data';
+import { islands } from '../lib/tina-islands';
+
+const home = await getHome();
+const data = home.data?.home;
+if (!data) return new Response('Homepage not found', { status: 404 });
+---
+<BaseLayout title={data.title} description={data.description} currentPath="/">
+  <TinaIsland name="home" wrapper={islands.home.wrapper} params={{}} primary>
+    <TinaHomeBody data={data} />
+  </TinaIsland>
+</BaseLayout>
+"""
+
+
+def render_tina_generic_page() -> str:
+    return """---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import TinaIsland from '@tinacms/astro/TinaIsland.astro';
+import TinaPageBody from '../components/TinaPageBody.astro';
+import { getPage, listPages } from '../lib/tina-data';
+import { islands } from '../lib/tina-islands';
+
+export async function getStaticPaths() {
+  const pages = await listPages();
+  return pages
+    .filter((node) => node.slug)
+    .map((node) => ({
+      params: { slug: node.slug },
+      props: { filename: node._sys.filename },
+    }));
+}
+
+const { filename } = Astro.props;
+const page = await getPage(filename);
+const data = page.data?.page;
+if (!data) return new Response('Not Found', { status: 404 });
+---
+<BaseLayout title={data.title} description={data.description} currentPath={data.routePath}>
+  <TinaIsland name="page" wrapper={islands.page.wrapper} params={{ filename }} primary>
+    <TinaPageBody data={data} />
+  </TinaIsland>
 </BaseLayout>
 """
 

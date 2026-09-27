@@ -1682,3 +1682,87 @@ def test_generate_astro_project_upgrades_legacy_asset_manifest_paths(
     assert (
         output_dir / "public/assets/images/be-water-1-large.webp"
     ).read_bytes() == b"legacy-image"
+
+
+
+def test_generate_astro_project_tina_editor_writes_visual_editing_scaffold(tmp_path: Path) -> None:
+    snapshot_dir = tmp_path / "snapshot"
+    raw_html_dir = snapshot_dir / "raw-html"
+    raw_html_dir.mkdir(parents=True)
+    write_text(
+        raw_html_dir / "index.html",
+        """<html><body><main><a class="grid-item" href="/projects/example"><div class="grid-image"><img src="/assets/images/example.webp" alt="Example" /></div><div class="portfolio-text"><h3 class="portfolio-title">Example</h3></div></a></main></body></html>""",
+    )
+    write_text(
+        raw_html_dir / "example.html",
+        "<html><body><main><h1>Example</h1><p>Editable body.</p></main></body></html>",
+    )
+    probe = SiteProbe(
+        target_url="https://example.com/",
+        final_home_url="https://example.com/",
+        site_origin="https://example.com",
+        homepage_status_code=200,
+        homepage_title="Example Site",
+        probably_squarespace=True,
+        homepage_links=["https://example.com/", "https://example.com/projects/example"],
+    )
+    snapshot = CrawlSnapshot(
+        generated_at="2026-09-26T00:00:00+00:00",
+        target_url="https://example.com/",
+        base_url="https://example.com/",
+        probe=probe,
+        pages=[
+            PageSnapshot(
+                requested_url="https://example.com/",
+                final_url="https://example.com/",
+                status_code=200,
+                content_type="text/html",
+                title="Example Site",
+                meta_description=None,
+                canonical_url="https://example.com/",
+                raw_html_path="raw-html/index.html",
+            ),
+            PageSnapshot(
+                requested_url="https://example.com/projects/example",
+                final_url="https://example.com/projects/example",
+                status_code=200,
+                content_type="text/html",
+                title="Example — Example Site",
+                meta_description=None,
+                canonical_url="https://example.com/projects/example",
+                raw_html_path="raw-html/example.html",
+            ),
+        ],
+    )
+    snapshot_path = snapshot_dir / "site_snapshot.json"
+    write_json(snapshot_path, snapshot)
+    output_dir = tmp_path / "astro-site"
+
+    generate_astro_project(
+        snapshot_path,
+        output_dir,
+        site_url="https://example.com",
+        markdown_first=False,
+        editor="tina",
+    )
+
+    package = read_json(output_dir / "package.json")
+    assert "tinacms dev" in package["scripts"]["edit"]
+    assert package["dependencies"]["@tinacms/astro"].startswith("^")
+    assert "tina()" in (output_dir / "astro.config.mjs").read_text(encoding="utf-8")
+    assert "\\n" not in (output_dir / "astro.config.mjs").read_text(encoding="utf-8")
+    assert (output_dir / "tina/config.ts").exists()
+    assert (output_dir / "src/tina-island-route.ts").exists()
+    astro_config = (output_dir / "astro.config.mjs").read_text(encoding="utf-8")
+    assert "tinaIslandRoute()" in astro_config
+    assert "prerender: false" in astro_config
+    assert (output_dir / "src/components/TinaPageBody.astro").exists()
+    assert (output_dir / "src/components/TinaHomeBody.astro").exists()
+    home = read_json(output_dir / "src/data/home.json")
+    assert home["title"]
+    assert isinstance(home["items"], list)
+    assert "legacyHtml" in home
+    assert not (output_dir / "src/content/pages/home.md").exists()
+    tina_config = (output_dir / "tina/config.ts").read_text(encoding="utf-8")
+    assert "type: 'rich-text'" in tina_config
+    assert "ui: { global: true, router: () => '/' }" in tina_config
