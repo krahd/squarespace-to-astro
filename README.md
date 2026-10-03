@@ -107,6 +107,14 @@ The automated browser-authentication flow does not support interactive two-facto
 - [Changelog](CHANGELOG.md): release history
 - [Project website](https://krahd.github.io/squarespace-to-astro/)
 
+
+
+## Professional migration service
+
+Need the migration done for you? A fixed-scope **US$1,500 Squarespace → Astro migration service** is available for simple public brochure/content sites. It includes migration to an editable Astro project, supported asset transfer, redirect mapping, a staging build, bounded QA, and handoff notes. Commerce, member systems, form-data migration, bespoke application features, and substantial redesign are outside the fixed scope.
+
+See [Professional migration service](docs/PROFESSIONAL_MIGRATION.md) for scope and acceptance criteria. To enquire, open a GitHub issue with the title **Migration service inquiry** and only public project details. **Do not post passwords, API keys, private exports, session data, or other credentials in an issue.**
+
 ## Development
 
 Python 3.11 or newer is required.
