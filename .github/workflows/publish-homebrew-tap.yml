@@ -99,17 +99,14 @@ jobs:
           echo "MACOS_ARM64_SHA256=$macos_sha" >> "$GITHUB_ENV"
           echo "LINUX_X86_64_SHA256=$linux_sha" >> "$GITHUB_ENV"
 
-      - name: Clone shared tap repo
-        env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        shell: bash
-        run: |
-          if [[ -z "$HOMEBREW_TAP_TOKEN" ]]; then
-            echo "HOMEBREW_TAP_TOKEN is not configured." >&2
-            exit 1
-          fi
-
-          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/${TAP_REPO}.git" tap-repo
+      - name: Check out shared Homebrew tap
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          repository: krahd/homebrew-tap
+          ref: main
+          path: tap-repo
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          persist-credentials: true
 
       - name: Render formula
         run: |
