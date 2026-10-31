@@ -1,6 +1,6 @@
 # squarespace-to-astro – Project Status
 
-Last updated: 2026-07-24 16:53
+Last updated: 2026-10-31 03:44
 
 ## Project purpose
 
@@ -148,6 +148,8 @@ Latest local verification:
 
 ## Known issues, risks, and limitations
 
+- Homebrew tap publishing credential hardening (31 October 2026): workflow now uses a pinned secondary `actions/checkout` instead of including the publishing token in a Git remote URL. Runtime execution of the changed workflow and provider-side token scope/rotation remain unverified.
+
 Known gaps outside current scope:
 
 - commerce data and checkout flows are not migrated
@@ -188,4 +190,4 @@ Current risks:
 - Migration output prioritises editability while offering fidelity controls for layout-heavy pages.
 ---
 
-Last updated: 2026-07-24 16:53
+Last updated: 2026-10-31 03:44
